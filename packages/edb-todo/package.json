@@ -1,0 +1,28 @@
+{
+	"name": "@agnishc/edb-todo",
+	"version": "0.1.0",
+	"description": "Pi extension: structured task list with live widget and system-prompt injection to prevent goal drift",
+	"keywords": ["pi-package", "pi-extension", "edb"],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-todo"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-todo#readme",
+	"bugs": { "url": "https://github.com/agnishcc/pi-extention-monorepo/issues" },
+	"publishConfig": { "access": "public" },
+	"scripts": { "test": "vitest run" },
+	"files": ["src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-ai": "*",
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-tui": "*",
+		"typebox": "*"
+	}
+}

@@ -1,0 +1,10 @@
+# Changelog
+
+## [Unreleased]
+
+### Added
+- Initial release: `todo_write` and `todo_read` tools
+- Live widget above editor showing up to 4 active tasks
+- System-prompt injection before every agent turn to prevent goal drift
+- `/todos` command with full-screen interactive viewer and progress bar
+- Session branch reconstruction so task state survives `/tree` navigation and forking

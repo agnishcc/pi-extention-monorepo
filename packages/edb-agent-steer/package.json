@@ -1,0 +1,26 @@
+{
+	"name": "@agnishc/edb-agent-steer",
+	"version": "0.1.0",
+	"description": "Pi extension: intercepts mid-turn messages with a steer / queue / discard / edit prompt",
+	"keywords": ["pi-package", "pi-extension", "edb"],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-agent-steer"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-agent-steer#readme",
+	"bugs": { "url": "https://github.com/agnishcc/pi-extention-monorepo/issues" },
+	"publishConfig": { "access": "public" },
+	"scripts": { "test": "vitest run" },
+	"files": ["src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-tui": "*"
+	}
+}

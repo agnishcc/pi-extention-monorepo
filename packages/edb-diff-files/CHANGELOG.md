@@ -1,0 +1,11 @@
+# Changelog
+
+## [Unreleased]
+
+### Added
+- Initial release: session-scoped file change tracker via write/edit tool events and bash diff snapshots
+- Live widget with flash notification on new files per turn
+- Footer status bar with created/edited/deleted counts
+- `/diff-files` command with full-screen list + inline diff viewer
+- Filter by change type, open in editor support
+- Configurable via env vars and `~/.pi/settings.json`

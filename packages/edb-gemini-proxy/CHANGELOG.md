@@ -1,0 +1,9 @@
+# Changelog
+
+## [Unreleased]
+
+### Added
+- Initial release: `gemini_proxy` tool with stream-json event parsing
+- `approvalMode` parameter: yolo / auto_edit / plan
+- File context injection and `includeDirectories` workspace expansion
+- Collapsed and expanded TUI rendering with per-tool-call status icons

@@ -1,0 +1,26 @@
+{
+	"name": "@agnishc/edb-append-system-prompt",
+	"version": "0.1.0",
+	"description": "Pi extension: manage per-session system prompt snippets with add/delete UI",
+	"keywords": ["pi-package", "pi-extension", "edb"],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-append-system-prompt"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-append-system-prompt#readme",
+	"bugs": { "url": "https://github.com/agnishcc/pi-extention-monorepo/issues" },
+	"publishConfig": { "access": "public" },
+	"scripts": { "test": "vitest run" },
+	"files": ["src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-tui": "*"
+	}
+}

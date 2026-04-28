@@ -1,0 +1,28 @@
+{
+	"name": "@agnishc/edb-ask-user",
+	"version": "0.1.0",
+	"description": "Pi extension: ask_user tool for structured questions — text, choice, and multi-step wizard",
+	"keywords": ["pi-package", "pi-extension", "edb"],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-ask-user"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-ask-user#readme",
+	"bugs": { "url": "https://github.com/agnishcc/pi-extention-monorepo/issues" },
+	"publishConfig": { "access": "public" },
+	"scripts": { "test": "vitest run" },
+	"files": ["src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-ai": "*",
+		"@mariozechner/pi-coding-agent": "*",
+		"@mariozechner/pi-tui": "*",
+		"typebox": "*"
+	}
+}

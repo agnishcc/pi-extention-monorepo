@@ -1,0 +1,25 @@
+{
+	"name": "@agnishc/edb-herald",
+	"version": "0.1.0",
+	"description": "Pi extension: git commit and PR agent with approval gates",
+	"keywords": ["pi-package", "pi-extension", "edb", "git"],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-herald"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-herald#readme",
+	"bugs": { "url": "https://github.com/agnishcc/pi-extention-monorepo/issues" },
+	"publishConfig": { "access": "public" },
+	"scripts": { "test": "vitest run" },
+	"files": ["src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-coding-agent": "*"
+	}
+}
