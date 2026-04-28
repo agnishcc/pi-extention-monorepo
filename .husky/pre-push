@@ -1,0 +1,10 @@
+#!/bin/sh
+
+echo "Running test suite with coverage before push..."
+npm run coverage
+if [ $? -ne 0 ]; then
+  echo "Tests or coverage thresholds failed. Push aborted."
+  exit 1
+fi
+
+echo "Tests + coverage passed."

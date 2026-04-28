@@ -1,0 +1,28 @@
+node_modules/
+packages/*/node_modules/
+
+*.log
+.DS_Store
+*.tsbuildinfo
+*.cpuprofile
+
+.pi/
+
+# Local-only
+thoughts/
+
+# Environment
+.env
+
+# Editor files
+.vscode/
+.zed/
+.idea/
+*.swp
+*.swo
+*~
+
+# Package specific
+.npm/
+coverage/
+.nyc_output/

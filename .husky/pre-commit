@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# Capture staged files before biome potentially rewrites them
+STAGED_FILES=$(git diff --cached --name-only)
+
+echo "Running formatting, linting, and type checking..."
+npm run check
+if [ $? -ne 0 ]; then
+  echo "❌ Checks failed. Please fix the errors before committing."
+  exit 1
+fi
+
+# Restage any files biome --write modified (skip paths now covered by .gitignore)
+for file in $STAGED_FILES; do
+  if [ -f "$file" ] && ! git check-ignore -q "$file"; then
+    git add "$file"
+  fi
+done
+
+echo "✅ All pre-commit checks passed!"
