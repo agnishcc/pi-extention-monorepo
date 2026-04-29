@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-herald",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Pi extension: git commit and PR agent with approval gates",
 	"keywords": [
 		"pi-package",
