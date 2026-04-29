@@ -225,6 +225,24 @@ npm run release:major  # 0.1.0 → 1.0.0  (breaking changes)
 npm run publish:dry   # runs checks + shows what would be published without uploading
 ```
 
+### Release checklist
+
+1. Run `git status` and confirm only intended changes are present.
+2. Review changed package `README.md` and `CHANGELOG.md` files.
+3. Run `npm run check && npm test` (or `npm run coverage` for the exact release validation).
+4. Commit the releaseable changes.
+5. Run `git status` again — the release script requires a clean tree.
+6. Run `npm run publish:dry` and inspect the tarball contents.
+7. Run the appropriate release command:
+   - `npm run release:patch` for fixes
+   - `npm run release:minor` for new features
+   - `npm run release:major` for breaking changes
+8. Verify npm and installability after publish.
+
+Important: this repo publishes **all packages together** in lockstep.
+
+Full workflow: [docs/publish-workflow.md](docs/publish-workflow.md)
+
 ### Manual version bump (without publishing)
 
 ```bash

@@ -44,6 +44,8 @@ npm run release:major   # 0.1.0 → 1.0.0
 
 The script bumps every `packages/*/package.json`, promotes each `## [Unreleased]` CHANGELOG heading to `## [X.Y.Z] - YYYY-MM-DD`, commits, tags `vX.Y.Z`, publishes to npm, reinstates `## [Unreleased]`, and pushes `main` + tag.
 
+For the full step-by-step checklist, see [docs/publish-workflow.md](docs/publish-workflow.md).
+
 ## Adding a new package
 
 1. `mkdir packages/edb-<name> && mkdir packages/edb-<name>/src`
