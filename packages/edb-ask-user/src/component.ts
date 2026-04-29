@@ -56,8 +56,15 @@ export function createAskUserComponent(
 	function currentOptions(): RenderOption[] {
 		const q = currentQuestion();
 		if (!q || q.type !== "choice") return [];
-		const opts: RenderOption[] = [...(q.options ?? [])];
-		if (q.allowOther !== false) opts.push({ value: "__other__", label: "Type something.", isOther: true });
+		const rawOpts = q.options ?? [];
+		const opts: RenderOption[] = rawOpts.map((o) => ({
+			...o,
+			isOther: o.isOther === true ? true : undefined,
+		}));
+		// If no option is already marked as free-text (isOther), auto-append "Type something."
+		if (!opts.some((o) => o.isOther)) {
+			opts.push({ value: "__other__", label: "Type something.", isOther: true });
+		}
 		return opts;
 	}
 

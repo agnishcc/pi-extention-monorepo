@@ -6,7 +6,7 @@
  *
  * Supports three question modes (freely mixed in one call):
  *   - text   : free-form text input via inline editor
- *   - choice : pick from a numbered option list (+ optional "Type something")
+ *   - choice : pick from a numbered option list (+ always-available free-text)
  *
  * Single question  → focused UI, no tab bar, immediate return
  * Multiple questions → tab-based wizard with a Submit tab
@@ -36,7 +36,10 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 			"For a single free-form question set type to 'text'. " +
 				"For a multiple-choice question set type to 'choice' and provide options. " +
 				"Pass several questions together for a multi-step flow.",
-			"For choice questions, set allowOther to false only when an open-ended answer is not acceptable.",
+			"A free-text option is always available for choice questions. " +
+				"By default, a 'Type something.' option is auto-appended. " +
+				"If you want to provide your own free-text option (e.g. 'Other', 'Custom'), " +
+				"mark it with isOther: true — this replaces the default and avoids redundancy.",
 		],
 		parameters: AskUserParams,
 
@@ -72,7 +75,6 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 			const questions: AskQuestion[] = params.questions.map((q, i) => ({
 				...q,
 				label: q.label || `Q${i + 1}`,
-				allowOther: true,
 			}));
 
 			// ── Build & show the custom TUI ───────────────────────────────────

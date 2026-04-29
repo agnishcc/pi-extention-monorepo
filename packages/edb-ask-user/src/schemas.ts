@@ -15,6 +15,16 @@ export const OptionSchema = Type.Object({
 			description: "Optional sub-label shown below the option (e.g. a clarifying note)",
 		}),
 	),
+	isOther: Type.Optional(
+		Type.Boolean({
+			description:
+				"Mark this option as a free-text option. When selected, opens an inline editor " +
+				"instead of returning the option value. Use this when you want to provide your own " +
+				"label for the free-text option (e.g. 'Other', 'Custom'). " +
+				"If no option is marked isOther, a default 'Type something.' option is auto-appended. " +
+				"Only one option should be marked isOther per question.",
+		}),
+	),
 });
 
 export const QuestionSchema = Type.Object({
@@ -45,13 +55,6 @@ export const QuestionSchema = Type.Object({
 			description:
 				"Hint text shown inside the editor for text questions " +
 				"(e.g. 'Enter your API key…'). Purely informational.",
-		}),
-	),
-	allowOther: Type.Optional(
-		Type.Boolean({
-			description:
-				"For choice questions: whether to append a 'Type something' option " +
-				"that opens a free-text editor. Defaults to true.",
 		}),
 	),
 });

@@ -4,6 +4,7 @@ export interface QuestionOption {
 	value: string;
 	label: string;
 	description?: string;
+	isOther?: boolean;
 }
 
 export type RenderOption = QuestionOption & { isOther?: boolean };
@@ -14,7 +15,6 @@ export interface AskQuestion {
 	type: "text" | "choice";
 	options?: QuestionOption[];
 	placeholder?: string;
-	allowOther?: boolean;
 	label?: string;
 }
 
