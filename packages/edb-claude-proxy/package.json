@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-claude-proxy",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "Pi extension: claude_proxy tool — delegate tasks to Claude Code CLI from within pi",
 	"keywords": [
 		"pi-package",

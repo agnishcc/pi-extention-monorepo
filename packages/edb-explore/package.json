@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-explore",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"description": "Pi extension: explore_dir tool — sub-agent directory search that keeps results out of main context",
 	"keywords": [
 		"pi-package",
