@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-04-29
 
 ### Added
 - Initial release: session-scoped file change tracker via write/edit tool events and bash diff snapshots

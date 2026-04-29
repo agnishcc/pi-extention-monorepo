@@ -1,8 +1,12 @@
 {
 	"name": "@agnishc/edb-usage-stats",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pi extension: /usage command showing token rates, reset timers, and live provider status",
-	"keywords": ["pi-package", "pi-extension", "edb"],
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"edb"
+	],
 	"type": "module",
 	"license": "MIT",
 	"author": "Agnish Chakraborty",
@@ -12,12 +16,25 @@
 		"directory": "packages/edb-usage-stats"
 	},
 	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-usage-stats#readme",
-	"bugs": { "url": "https://github.com/agnishcc/pi-extention-monorepo/issues" },
-	"publishConfig": { "access": "public" },
-	"scripts": { "test": "vitest run" },
-	"files": ["src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"bugs": {
+		"url": "https://github.com/agnishcc/pi-extention-monorepo/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"test": "vitest run"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG.md"
+	],
 	"pi": {
-		"extensions": ["./src/index.ts"]
+		"extensions": [
+			"./src/index.ts"
+		]
 	},
 	"peerDependencies": {
 		"@mariozechner/pi-coding-agent": "*",

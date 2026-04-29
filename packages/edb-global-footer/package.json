@@ -1,8 +1,12 @@
 {
 	"name": "@agnishc/edb-global-footer",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Pi extension: two-line status footer showing path, git branch, token usage, and model",
-	"keywords": ["pi-package", "pi-extension", "edb"],
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"edb"
+	],
 	"type": "module",
 	"license": "MIT",
 	"author": "Agnish Chakraborty",
@@ -12,12 +16,25 @@
 		"directory": "packages/edb-global-footer"
 	},
 	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-global-footer#readme",
-	"bugs": { "url": "https://github.com/agnishcc/pi-extention-monorepo/issues" },
-	"publishConfig": { "access": "public" },
-	"scripts": { "test": "vitest run" },
-	"files": ["src", "README.md", "LICENSE", "CHANGELOG.md"],
+	"bugs": {
+		"url": "https://github.com/agnishcc/pi-extention-monorepo/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"test": "vitest run"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG.md"
+	],
 	"pi": {
-		"extensions": ["./src/index.ts"]
+		"extensions": [
+			"./src/index.ts"
+		]
 	},
 	"peerDependencies": {
 		"@mariozechner/pi-ai": "*",

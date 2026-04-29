@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-04-29
 
 ### Added
 - Initial release: `explore_dir` tool with dedicated sub-agent directory search

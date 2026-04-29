@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2026-04-29
 
 ### Changed
 - Replaced question-level `allowOther` with option-level `isOther` boolean on `QuestionOption`
