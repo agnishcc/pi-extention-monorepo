@@ -11,6 +11,7 @@ Monorepo for Pi CLI extensions published to npm under the `@agnishc/edb-*` famil
 | [`edb-append-system-prompt`](packages/edb-append-system-prompt) | `pi install npm:@agnishc/edb-append-system-prompt` | Manage per-session system prompt snippets with add / delete UI |
 | [`edb-auto-name-session`](packages/edb-auto-name-session) | `pi install npm:@agnishc/edb-auto-name-session` | Replaces Pi's default first-message session label with a generated title |
 | [`edb-claude-proxy`](packages/edb-claude-proxy) | `pi install npm:@agnishc/edb-claude-proxy` | `claude_proxy` tool — delegate tasks to Claude Code CLI |
+| [`edb-context-viewer`](packages/edb-context-viewer) | `pi install npm:@agnishc/edb-context-viewer` | Inspect the system prompt and full LLM context in scrollable overlays |
 | [`edb-diff-files`](packages/edb-diff-files) | `pi install npm:@agnishc/edb-diff-files` | Live widget tracking files changed this session with inline diff viewer |
 | [`edb-explore`](packages/edb-explore) | `pi install npm:@agnishc/edb-explore` | `explore_dir` tool — sub-agent directory search that keeps results out of main context |
 | [`edb-gemini-proxy`](packages/edb-gemini-proxy) | `pi install npm:@agnishc/edb-gemini-proxy` | `gemini_proxy` tool — delegate tasks to Google Gemini CLI |
