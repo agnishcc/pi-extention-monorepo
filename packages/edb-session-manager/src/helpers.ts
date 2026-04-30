@@ -20,16 +20,20 @@ export function shortCwd(cwd: string): string {
 	return parts.length <= 3 ? s : `…/${parts.slice(-3).join("/")}`;
 }
 
+export function singleLine(text: string): string {
+	return text.replace(/[\x00-\x1f\x7f]+/g, " ").trim();
+}
+
 export function sessionTitle(s: SessionInfo): string {
-	if (s.name) return s.name;
-	const f = (s.firstMessage ?? "").trim();
+	if (s.name) return singleLine(s.name);
+	const f = singleLine(s.firstMessage ?? "");
 	if (!f) return basename(s.path, ".jsonl");
 	return f.length > 60 ? `${f.slice(0, 57)}…` : f;
 }
 
 /** Combined text used for fuzzy search (title + first message). */
 export function searchText(s: SessionInfo): string {
-	return `${sessionTitle(s)} ${s.firstMessage ?? ""}`;
+	return `${sessionTitle(s)} ${singleLine(s.firstMessage ?? "")}`;
 }
 
 // ── Session file helpers ───────────────────────────────────────────────────────

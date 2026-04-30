@@ -1,16 +1,9 @@
 import { SessionManager } from "@mariozechner/pi-coding-agent";
-import {
-	fuzzyFilter,
-	Input,
-	Key,
-	matchesKey,
-	type SelectItem,
-	SelectList,
-	truncateToWidth,
-	visibleWidth,
-} from "@mariozechner/pi-tui";
+import { fuzzyFilter, Input, Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { formatAge, searchText, sessionTitle, shortCwd, writeSessionName } from "./helpers";
 import type { Mode, SessionAction, SessionInfo } from "./types";
+
+const LIST_VISIBLE = 10;
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -24,6 +17,7 @@ export function createSessionComponent(
 	const dim = (s: string) => theme.fg("dim", s);
 	const muted = (s: string) => theme.fg("muted", s);
 	const accent = (s: string) => theme.fg("accent", s);
+	const warning = (s: string) => theme.fg("warning", s);
 
 	const currentSessionPath: string | null = ctx.sessionManager?.getSessionFile?.() ?? null;
 
@@ -33,6 +27,8 @@ export function createSessionComponent(
 	let displayedSessions: SessionInfo[] = [];
 	let showAll = false;
 	let selected: SessionInfo | null = null;
+	let selectedIndex = 0;
+	let scrollOffset = 0;
 	let loaded = false;
 	let renamingSession: SessionInfo | null = null;
 
@@ -41,20 +37,6 @@ export function createSessionComponent(
 	searchInput.focused = true;
 
 	let renameInput: Input | null = null;
-
-	const selectTheme = {
-		selectedPrefix: (t: string) => theme.fg("accent", t),
-		selectedText: (t: string) => theme.fg("accent", t),
-		description: (t: string) => theme.fg("dim", t),
-		scrollInfo: (t: string) => theme.fg("dim", t),
-		noMatch: (t: string) => theme.fg("warning", t),
-	};
-
-	const list = new SelectList([], 10, selectTheme);
-
-	list.onSelectionChange = (item) => {
-		if (item) selected = displayedSessions[Number(item.value)] ?? null;
-	};
 
 	// ── Data helpers ───────────────────────────────────────────────────────
 
@@ -67,24 +49,60 @@ export function createSessionComponent(
 		return meta;
 	}
 
-	function rebuildListItems(): void {
-		const items: SelectItem[] = displayedSessions.map((s, i) => ({
-			value: String(i),
-			label: sessionTitle(s),
-			description: buildDescription(s),
-		}));
-		(list as any).items = items;
-		(list as any).filteredItems = items;
-		list.setSelectedIndex(0);
-		selected = displayedSessions[0] ?? null;
-		list.invalidate();
-		tui.requestRender();
+	function clamp(value: number, min: number, max: number): number {
+		return Math.max(min, Math.min(value, max));
+	}
+
+	function syncSelection(): void {
+		if (displayedSessions.length === 0) {
+			selectedIndex = 0;
+			scrollOffset = 0;
+			selected = null;
+			return;
+		}
+
+		selectedIndex = clamp(selectedIndex, 0, displayedSessions.length - 1);
+		const maxScroll = Math.max(0, displayedSessions.length - LIST_VISIBLE);
+
+		if (selectedIndex < scrollOffset) {
+			scrollOffset = selectedIndex;
+		} else if (selectedIndex >= scrollOffset + LIST_VISIBLE) {
+			scrollOffset = selectedIndex - LIST_VISIBLE + 1;
+		}
+
+		scrollOffset = clamp(scrollOffset, 0, maxScroll);
+		selected = displayedSessions[selectedIndex] ?? null;
+	}
+
+	function setSelectedIndex(index: number): void {
+		if (displayedSessions.length === 0) {
+			syncSelection();
+			return;
+		}
+		selectedIndex = clamp(index, 0, displayedSessions.length - 1);
+		syncSelection();
+	}
+
+	function moveSelection(delta: number): void {
+		if (displayedSessions.length === 0) return;
+		const next = selectedIndex + delta;
+		if (next < 0) {
+			selectedIndex = displayedSessions.length - 1;
+		} else if (next >= displayedSessions.length) {
+			selectedIndex = 0;
+		} else {
+			selectedIndex = next;
+		}
+		syncSelection();
 	}
 
 	function updateFilter(): void {
 		const q = searchInput.getValue().trim();
 		displayedSessions = q ? fuzzyFilter(allSessions, q, searchText) : [...allSessions];
-		rebuildListItems();
+		selectedIndex = 0;
+		scrollOffset = 0;
+		syncSelection();
+		tui.requestRender();
 	}
 
 	async function reloadSessions(): Promise<void> {
@@ -98,6 +116,8 @@ export function createSessionComponent(
 			updateFilter();
 		} catch {
 			loaded = true;
+			displayedSessions = [];
+			syncSelection();
 			tui.requestRender();
 		}
 	}
@@ -157,6 +177,14 @@ export function createSessionComponent(
 
 	// ── Rendering ──────────────────────────────────────────────────────────
 
+	function padToWidth(s: string, width: number): string {
+		return s + " ".repeat(Math.max(0, width - visibleWidth(s)));
+	}
+
+	function fixedRow(s: string, width: number): string {
+		return padToWidth(truncateToWidth(s, width, ""), width);
+	}
+
 	function renderHeader(width: number): string[] {
 		const titlePlain = " ✦ Sessions";
 		const wsTab = !showAll ? theme.bold(accent("workspace")) : muted("workspace");
@@ -170,15 +198,79 @@ export function createSessionComponent(
 		const inputLine = searchInput.render(Math.max(1, width - visibleWidth(prefix)))[0] ?? "";
 		const searchRow = prefix + inputLine;
 
-		return [titleRow, searchRow];
+		return [fixedRow(titleRow, width), fixedRow(searchRow, width)];
 	}
 
-	function renderBody(width: number): string[] {
-		if (!loaded) return [dim("  Loading…")];
-		if (displayedSessions.length === 0) {
-			return [dim(searchInput.getValue().trim() ? "  No matches." : "  No sessions found.")];
+	function renderSessionRow(session: SessionInfo, index: number, width: number): string {
+		const isSelected = index === selectedIndex;
+		const isCurrent = session.path === currentSessionPath;
+		const rawTitle = sessionTitle(session);
+		const rawDescription = buildDescription(session);
+		const cursor = isSelected ? accent("› ") : "  ";
+		const cursorWidth = visibleWidth(cursor);
+
+		let line: string;
+		if (width > 48) {
+			const maxDescriptionWidth = Math.max(10, Math.min(42, Math.floor(width * 0.45)));
+			const description = dim(truncateToWidth(rawDescription, maxDescriptionWidth, "…"));
+			const titleWidth = Math.max(1, width - cursorWidth - visibleWidth(description) - 2);
+			let title = truncateToWidth(rawTitle, titleWidth, "…");
+			if (isCurrent) title = accent(title);
+			else if (session.name) title = warning(title);
+			if (isSelected) title = theme.bold(title);
+			const left = cursor + title;
+			const spacing = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(description)));
+			line = left + spacing + description;
+		} else {
+			const titleWidth = Math.max(1, width - cursorWidth);
+			let title = truncateToWidth(rawTitle, titleWidth, "…");
+			if (isCurrent) title = accent(title);
+			else if (session.name) title = warning(title);
+			if (isSelected) title = theme.bold(title);
+			line = cursor + title;
 		}
-		return list.render(width);
+
+		line = fixedRow(line, width);
+		return isSelected ? theme.bg("selectedBg", line) : line;
+	}
+
+	function renderListViewport(width: number): string[] {
+		const lines: string[] = [];
+		syncSelection();
+
+		if (!loaded) {
+			lines.push(fixedRow(dim("  Loading…"), width));
+			for (let i = 1; i < LIST_VISIBLE; i++) lines.push(fixedRow("", width));
+			lines.push(fixedRow(dim("  Loading sessions…"), width));
+			return lines;
+		}
+
+		if (displayedSessions.length === 0) {
+			const message = searchInput.getValue().trim() ? "  No matches." : "  No sessions found.";
+			lines.push(fixedRow(dim(message), width));
+			for (let i = 1; i < LIST_VISIBLE; i++) lines.push(fixedRow("", width));
+			lines.push(fixedRow(dim("  0 sessions"), width));
+			return lines;
+		}
+
+		for (let i = 0; i < LIST_VISIBLE; i++) {
+			const itemIndex = scrollOffset + i;
+			const session = displayedSessions[itemIndex];
+			lines.push(session ? renderSessionRow(session, itemIndex, width) : fixedRow(dim("  ~"), width));
+		}
+
+		const end = Math.min(scrollOffset + LIST_VISIBLE, displayedSessions.length);
+		const scrollPercent =
+			displayedSessions.length <= LIST_VISIBLE
+				? "All"
+				: scrollOffset === 0
+					? "Top"
+					: end === displayedSessions.length
+						? "Bot"
+						: `${Math.round((end / displayedSessions.length) * 100)}%`;
+		const status = `  ${scrollOffset + 1}-${end} of ${displayedSessions.length} [${scrollPercent}]`;
+		lines.push(fixedRow(dim(status), width));
+		return lines;
 	}
 
 	function renderFooter(width: number): string[] {
@@ -188,17 +280,30 @@ export function createSessionComponent(
 			const label = truncateToWidth(sessionTitle(renamingSession), 42, "…");
 			const prefix = ` ${accent("✏")}  `;
 			const inputLine = renameInput.render(Math.max(1, width - visibleWidth(prefix)))[0] ?? "";
-			return [divider, dim(`  Renaming  "${label}"`), prefix + inputLine, dim("  Enter confirm  ·  Esc cancel")];
+			return [
+				fixedRow(divider, width),
+				fixedRow(dim(`  Renaming  "${label}"`), width),
+				fixedRow(prefix + inputLine, width),
+				fixedRow(dim("  Enter confirm  ·  Esc cancel"), width),
+			];
 		}
 
-		return [divider, dim("  ↑↓ navigate  ·  Enter resume  ·  n rename  ·  d delete  ·  Tab scope  ·  Esc close")];
+		return [
+			fixedRow(divider, width),
+			fixedRow(
+				dim(
+					"  ↑↓ navigate  ·  PgUp/PgDn page  ·  Enter resume  ·  n rename  ·  d delete  ·  Tab scope  ·  Esc close",
+				),
+				width,
+			),
+		];
 	}
 
 	// ── Input handling ─────────────────────────────────────────────────────
 
 	return {
 		render(width: number): string[] {
-			return [...renderHeader(width), dim("─".repeat(width)), ...renderBody(width), ...renderFooter(width)];
+			return [...renderHeader(width), dim("─".repeat(width)), ...renderListViewport(width), ...renderFooter(width)];
 		},
 
 		handleInput(data: string): void {
@@ -247,14 +352,39 @@ export function createSessionComponent(
 				return;
 			}
 
-			// Arrow keys navigate the list
-			if (
-				matchesKey(data, Key.up) ||
-				matchesKey(data, Key.down) ||
-				matchesKey(data, Key.pageUp) ||
-				matchesKey(data, Key.pageDown)
-			) {
-				list.handleInput(data);
+			// List navigation
+			if (matchesKey(data, Key.up) || data === "k") {
+				moveSelection(-1);
+				tui.requestRender();
+				return;
+			}
+
+			if (matchesKey(data, Key.down) || data === "j") {
+				moveSelection(1);
+				tui.requestRender();
+				return;
+			}
+
+			if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("b"))) {
+				setSelectedIndex(selectedIndex - LIST_VISIBLE);
+				tui.requestRender();
+				return;
+			}
+
+			if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("f"))) {
+				setSelectedIndex(selectedIndex + LIST_VISIBLE);
+				tui.requestRender();
+				return;
+			}
+
+			if (matchesKey(data, Key.home) || data === "g") {
+				setSelectedIndex(0);
+				tui.requestRender();
+				return;
+			}
+
+			if (matchesKey(data, Key.end) || data === "G") {
+				setSelectedIndex(displayedSessions.length - 1);
 				tui.requestRender();
 				return;
 			}
@@ -266,7 +396,6 @@ export function createSessionComponent(
 
 		invalidate(): void {
 			searchInput.invalidate();
-			list.invalidate();
 			renameInput?.invalidate();
 		},
 	};
