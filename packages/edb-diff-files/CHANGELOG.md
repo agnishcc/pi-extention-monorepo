@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] - 2026-05-05
 
 ### Fixed
 - Open in editor (`o` key) now properly opens terminal editors like nvim by stopping the TUI first, matching pi core behavior
