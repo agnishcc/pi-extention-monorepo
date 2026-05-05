@@ -34,6 +34,14 @@ export default function autoNameSessionExtension(pi: ExtensionAPI): void {
 		pending = false;
 	});
 
+	pi.on("before_agent_start", async (event) => {
+		const name = pi.getSessionName();
+		if (!name) return;
+		return {
+			systemPrompt: `${event.systemPrompt}\n\nCurrent session name: ${name}`,
+		};
+	});
+
 	pi.on("message_end", async (event, ctx) => {
 		if (!armed || pending || pi.getSessionName()) return;
 		if (event.message.role !== "user") return;
