@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
 import { matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
@@ -22,35 +22,6 @@ const FILTER_LABEL: Record<FilterMode, string> = {
 	deleted: "-deleted",
 };
 
-// ─── Open a file in the best available GUI editor ───────────────────────────
-
-function openInEditor(filePath: string): string {
-	const candidates = ["nvim", "cursor", "code", "subl", "zed", "atom"];
-
-	// Prefer $VISUAL / $EDITOR if they reference a known GUI editor
-	const configured = (process.env.VISUAL ?? process.env.EDITOR ?? "").split(" ")[0];
-	if (configured) {
-		const base = basename(configured);
-		if (candidates.some((e) => base.includes(e))) {
-			spawn(configured, [filePath], { detached: true, stdio: "ignore" }).unref();
-			return `Opened in ${base}`;
-		}
-	}
-
-	for (const editor of candidates) {
-		const w = spawnSync("which", [editor], { encoding: "utf-8", stdio: "pipe" });
-		if (w.status === 0) {
-			spawn(editor, [filePath], { detached: true, stdio: "ignore" }).unref();
-			return `Opened in ${editor}`;
-		}
-	}
-
-	// Platform fallback
-	const opener = process.platform === "darwin" ? "open" : "xdg-open";
-	spawn(opener, [filePath], { detached: true, stdio: "ignore" }).unref();
-	return "Opened in default app";
-}
-
 // ─── Interactive /diff-files viewer ──────────────────────────────────────────
 
 class FilesViewComponent {
@@ -61,13 +32,17 @@ class FilesViewComponent {
 	private statusMsg = "";
 	private cachedWidth?: number;
 	private cachedLines?: string[];
+	private readonly tui: any;
 
 	constructor(
 		private readonly entries: ReadonlyArray<FileEntry>,
 		private readonly diffs: Map<string, string[]>,
 		private readonly theme: any,
 		private readonly onClose: () => void,
-	) {}
+		tui: any,
+	) {
+		this.tui = tui;
+	}
 
 	// ── Keyboard handling ──────────────────────────────────────────────────────
 
@@ -96,7 +71,7 @@ class FilesViewComponent {
 		} else if (matchesKey(data, "o")) {
 			const entry = this.entries[this.cursor];
 			if (entry) {
-				this.statusMsg = openInEditor(entry.path);
+				this.statusMsg = this.openFileInEditor(entry.path);
 				this.invalidate();
 			}
 		} else if (matchesKey(data, "f")) {
@@ -128,7 +103,7 @@ class FilesViewComponent {
 		} else if (matchesKey(data, "o")) {
 			const entry = this.entries[this.cursor];
 			if (entry) {
-				this.statusMsg = openInEditor(entry.path);
+				this.statusMsg = this.openFileInEditor(entry.path);
 				this.invalidate();
 			}
 		} else if (matchesKey(data, "escape") || matchesKey(data, "q")) {
@@ -136,6 +111,45 @@ class FilesViewComponent {
 			this.statusMsg = "";
 			this.invalidate();
 		}
+	}
+
+	private openFileInEditor(filePath: string): string {
+		// Use same logic as pi core: respect $VISUAL / $EDITOR
+		const editorCmd = process.env.VISUAL || process.env.EDITOR;
+		if (!editorCmd) {
+			this.statusMsg = "No editor configured (set $VISUAL or $EDITOR)";
+			return this.statusMsg;
+		}
+
+		try {
+			// Stop TUI to release terminal for interactive editor
+			this.tui.stop();
+
+			// Split by space to support editor arguments (e.g., "code --wait")
+			const [editor, ...editorArgs] = editorCmd.split(" ");
+
+			// Spawn editor synchronously with inherited stdio for interactive editing
+			const result = spawnSync(editor, [...editorArgs, filePath], {
+				stdio: "inherit",
+				shell: process.platform === "win32",
+			});
+
+			// On non-zero exit, show status
+			if (result.status !== 0) {
+				this.statusMsg = `Editor exited with status ${result.status}`;
+			} else {
+				this.statusMsg = `Opened in ${basename(editor)}`;
+			}
+		} catch {
+			this.statusMsg = "Failed to open editor";
+		} finally {
+			// Restart TUI
+			this.tui.start();
+			// Force full re-render since external editor uses alternate screen
+			this.tui.requestRender(true);
+		}
+
+		return this.statusMsg;
 	}
 
 	private filteredEntries(): ReadonlyArray<FileEntry> {
@@ -347,9 +361,9 @@ export default function diffFilesExtension(pi: any): void {
 		if (entries.length === 0 || !uiTheme?.fg) {
 			ctx.ui.setStatus(STATUS_KEY, undefined);
 		} else {
-			const created = entries.filter((e) => e.changeType === ChangeType.Created).length;
-			const edited = entries.filter((e) => e.changeType === ChangeType.Edited).length;
-			const deleted = entries.filter((e) => e.changeType === ChangeType.Deleted).length;
+			const created = entries.filter((e: FileEntry) => e.changeType === ChangeType.Created).length;
+			const edited = entries.filter((e: FileEntry) => e.changeType === ChangeType.Edited).length;
+			const deleted = entries.filter((e: FileEntry) => e.changeType === ChangeType.Deleted).length;
 			const inner: string[] = [];
 			if (created > 0) inner.push(uiTheme.fg("toolDiffAdded", `+${created}`));
 			if (edited > 0) inner.push(uiTheme.fg("warning", `~${edited}`));
@@ -516,8 +530,8 @@ export default function diffFilesExtension(pi: any): void {
 				}
 			}
 
-			await ctx.ui.custom((_tui: any, theme: any, _kb: any, done: () => void) => {
-				return new FilesViewComponent(entries, diffs, theme, () => done());
+			await ctx.ui.custom((tui: any, theme: any, _kb: any, done: () => void) => {
+				return new FilesViewComponent(entries, diffs, theme, () => done(), tui);
 			});
 		},
 	});
