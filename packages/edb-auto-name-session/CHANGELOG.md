@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Expose the current session name to agents by appending it to the system prompt before agent startup.
+
 ## [0.5.0] - 2026-05-05
 
 ## [0.2.0] - 2026-04-29
