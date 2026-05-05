@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.1] - 2026-05-05
 
 ### Added
 - Expose the current session name to agents by appending it to the system prompt before agent startup.
