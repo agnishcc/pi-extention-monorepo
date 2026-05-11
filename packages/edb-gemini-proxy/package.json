@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-gemini-proxy",
-	"version": "0.8.1",
+	"version": "0.8.2",
 	"description": "Pi extension: gemini_proxy tool — delegate tasks to Google Gemini CLI from within pi",
 	"keywords": [
 		"pi-package",
