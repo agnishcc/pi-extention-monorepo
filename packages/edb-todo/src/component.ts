@@ -1,4 +1,4 @@
-import { matchesKey, Text, truncateToWidth } from "@mariozechner/pi-tui";
+import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Task, TaskDetails } from "./types";
 import { PRIORITY_ORDER, STATUS_ICON } from "./types";
 

@@ -12,7 +12,7 @@
  * Multiple questions → tab-based wizard with a Submit tab
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createAskUserComponent } from "./component";
 import { renderCall, renderResult } from "./render";
 import { AskUserParams } from "./schemas";

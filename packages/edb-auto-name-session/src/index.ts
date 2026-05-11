@@ -1,5 +1,5 @@
-import { complete } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { complete } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { extractUserText, sanitizeSessionName, shouldArmAutoNaming } from "./title";
 
 const MODEL_PROVIDER = "opencode";

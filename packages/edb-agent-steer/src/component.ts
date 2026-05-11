@@ -1,4 +1,4 @@
-import { matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
+import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { SteerChoice } from "./types";
 
 // ── Component ──────────────────────────────────────────────────────────────────

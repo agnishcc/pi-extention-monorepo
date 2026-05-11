@@ -1,5 +1,5 @@
-import { SessionManager } from "@mariozechner/pi-coding-agent";
-import { fuzzyFilter, Input, Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { fuzzyFilter, Input, Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { formatAge, searchText, sessionTitle, shortCwd, writeSessionName } from "./helpers";
 import type { Mode, SessionAction, SessionInfo } from "./types";
 

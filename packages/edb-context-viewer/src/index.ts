@@ -16,7 +16,7 @@ import {
 	type ExtensionCommandContext,
 	type SessionContext,
 	type Theme,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { ScrollableOverlay } from "./scrollable-overlay";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

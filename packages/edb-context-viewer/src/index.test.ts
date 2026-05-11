@@ -1,4 +1,4 @@
-import type { SessionContext } from "@mariozechner/pi-coding-agent";
+import type { SessionContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { buildTotalContextText, formatMessageForDisplay } from "./index";
 

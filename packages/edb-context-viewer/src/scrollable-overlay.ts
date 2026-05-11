@@ -9,8 +9,8 @@
  *   - `Escape` / `q` to close
  */
 
-import { copyToClipboard as copyTextToClipboard, type Theme } from "@mariozechner/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { copyToClipboard as copyTextToClipboard, type Theme } from "@earendil-works/pi-coding-agent";
+import { Key, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 const CONTENT_HEIGHT = 30;
 

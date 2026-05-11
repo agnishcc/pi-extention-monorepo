@@ -7,7 +7,7 @@ import {
 	SelectList,
 	truncateToWidth,
 	visibleWidth,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { snippets } from "./state";
 import type { OverlayAction } from "./types";
 import { formatAge, wordCount } from "./utils";

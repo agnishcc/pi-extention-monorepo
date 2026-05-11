@@ -1,4 +1,4 @@
-import { Editor, type EditorTheme, Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
+import { Editor, type EditorTheme, Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Answer, AskQuestion, AskResult, RenderOption } from "./types";
 
 // ── Component factory ──────────────────────────────────────────────────────────

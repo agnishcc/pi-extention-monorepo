@@ -1,4 +1,4 @@
-import { Text, truncateToWidth } from "@mariozechner/pi-tui";
+import { Text, truncateToWidth } from "@earendil-works/pi-tui";
 import type { AskQuestion, AskResult } from "./types";
 
 // ── TUI rendering ──────────────────────────────────────────────────────────────

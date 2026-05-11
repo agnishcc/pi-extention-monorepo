@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { basename, relative, resolve } from "node:path";
-import { matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
+import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import { loadConfig, resolveColors } from "./config";
 import { getFileDiff, getGitDiff, isGitRepo } from "./git";
 import { renderWidget } from "./renderer";

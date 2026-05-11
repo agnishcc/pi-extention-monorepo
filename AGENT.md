@@ -65,7 +65,7 @@ Every package under `packages/edb-<name>/` must have:
     "extensions": ["./src/index.ts"]
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*"
   }
 }
 ```
@@ -80,7 +80,7 @@ Key rules:
 
 ### `src/index.ts` — extension entry point
 ```typescript
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerMyFeature } from "./my-feature";
 
 export default function (pi: ExtensionAPI): void {
@@ -303,8 +303,8 @@ pi.setSessionName(name)
 pi.getSessionName()
 ```
 
-Source types are in `@mariozechner/pi-coding-agent`.
-Full docs: `/opt/homebrew/lib/node_modules/@mariozechner/pi-coding-agent/docs/extensions.md`
+Source types are in `@earendil-works/pi-coding-agent`.
+Full docs: `/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/docs/extensions.md`
 
 ---
 

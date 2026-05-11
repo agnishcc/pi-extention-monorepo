@@ -9,7 +9,7 @@
  * Git status is refreshed after every turn and on branch change events.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createFooterRenderer } from "./footer";
 import { readGitStatus } from "./git";
 import type { GitStatus } from "./types";

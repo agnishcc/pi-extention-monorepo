@@ -1,5 +1,5 @@
-import { DynamicBorder, getSettingsListTheme } from "@mariozechner/pi-coding-agent";
-import { Container, Key, matchesKey, type SettingItem, SettingsList, Text, visibleWidth } from "@mariozechner/pi-tui";
+import { DynamicBorder, getSettingsListTheme } from "@earendil-works/pi-coding-agent";
+import { Container, Key, matchesKey, type SettingItem, SettingsList, Text, visibleWidth } from "@earendil-works/pi-tui";
 import { fetchAntigravityUsage } from "./providers/antigravity";
 import { fetchClaudeUsage } from "./providers/claude";
 import { fetchCodexUsage } from "./providers/codex";

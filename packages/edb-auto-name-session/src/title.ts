@@ -1,4 +1,4 @@
-import type { SessionEntry } from "@mariozechner/pi-coding-agent";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 const MAX_PROMPT_CHARS = 4_000;
 const MAX_TITLE_CHARS = 60;

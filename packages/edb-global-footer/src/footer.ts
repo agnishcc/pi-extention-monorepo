@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@mariozechner/pi-ai";
-import { truncateToWidth } from "@mariozechner/pi-tui";
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import {
 	formatThinkingLabel,
 	formatTokens,

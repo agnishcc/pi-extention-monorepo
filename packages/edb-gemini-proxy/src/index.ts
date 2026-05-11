@@ -12,7 +12,7 @@
  * Auth:      GEMINI_API_KEY env var, or run `gemini auth` to login via OAuth.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { findGeminiCli } from "./cli";
 import { execute } from "./execute";

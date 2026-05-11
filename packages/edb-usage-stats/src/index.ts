@@ -9,7 +9,7 @@
  * Rate windows, reset timers, and live provider status are all shown.
  */
 
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { UsageComponent } from "./component";
 
 // ── Extension ──────────────────────────────────────────────────────────────────

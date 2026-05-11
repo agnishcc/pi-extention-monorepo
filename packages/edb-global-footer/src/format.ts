@@ -1,5 +1,5 @@
-import { buildSessionContext } from "@mariozechner/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { buildSessionContext } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ThinkingLevel } from "./types";
 
 // ── Format helpers ─────────────────────────────────────────────────────────────
