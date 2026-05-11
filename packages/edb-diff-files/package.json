@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-diff-files",
-	"version": "0.6.1",
+	"version": "0.8.0",
 	"description": "Pi extension: live widget tracking files changed this session with an inline diff viewer",
 	"keywords": [
 		"pi-package",
