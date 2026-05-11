@@ -33,3 +33,9 @@ export const TodoWriteParams = Type.Object({
 			"both updated ones and unchanged ones.",
 	}),
 });
+
+export const TodoRemoveParams = Type.Object({
+	ids: Type.Array(Type.String(), {
+		description: "Task IDs to remove from the list permanently.",
+	}),
+});

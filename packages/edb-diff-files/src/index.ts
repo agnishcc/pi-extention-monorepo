@@ -56,29 +56,29 @@ class FilesViewComponent {
 
 	private handleListInput(data: string): void {
 		const n = this.entries.length;
-		if (matchesKey(data, "j") || matchesKey(data, "down")) {
+		if (data === "j" || matchesKey(data, "down")) {
 			this.cursor = n > 0 ? Math.min(this.cursor + 1, n - 1) : 0;
-			this.invalidate();
-		} else if (matchesKey(data, "k") || matchesKey(data, "up")) {
+			this.rerender();
+		} else if (data === "k" || matchesKey(data, "up")) {
 			this.cursor = Math.max(0, this.cursor - 1);
-			this.invalidate();
-		} else if (matchesKey(data, "return")) {
+			this.rerender();
+		} else if (matchesKey(data, "enter")) {
 			if (this.entries[this.cursor]) {
 				this.mode = "diff";
 				this.diffScroll = 0;
-				this.invalidate();
+				this.rerender();
 			}
-		} else if (matchesKey(data, "o")) {
+		} else if (data === "o") {
 			const entry = this.entries[this.cursor];
 			if (entry) {
 				this.statusMsg = this.openFileInEditor(entry.path);
-				this.invalidate();
+				this.rerender();
 			}
-		} else if (matchesKey(data, "f")) {
+		} else if (data === "f") {
 			const idx = FILTER_CYCLE.indexOf(this.filterMode);
 			this.filterMode = FILTER_CYCLE[(idx + 1) % FILTER_CYCLE.length]!;
 			this.cursor = 0;
-			this.invalidate();
+			this.rerender();
 		} else if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
 			this.onClose();
 		}
@@ -88,33 +88,32 @@ class FilesViewComponent {
 		const viewH = this.viewportHeight();
 		const maxScroll = Math.max(0, this.currentDiffLines().length - viewH);
 
-		if (matchesKey(data, "j") || matchesKey(data, "down")) {
+		if (data === "j" || matchesKey(data, "down")) {
 			this.diffScroll = Math.min(this.diffScroll + 1, maxScroll);
-			this.invalidate();
-		} else if (matchesKey(data, "k") || matchesKey(data, "up")) {
+			this.rerender();
+		} else if (data === "k" || matchesKey(data, "up")) {
 			this.diffScroll = Math.max(0, this.diffScroll - 1);
-			this.invalidate();
+			this.rerender();
 		} else if (matchesKey(data, "ctrl+d")) {
 			this.diffScroll = Math.min(this.diffScroll + Math.floor(viewH / 2), maxScroll);
-			this.invalidate();
+			this.rerender();
 		} else if (matchesKey(data, "ctrl+u")) {
 			this.diffScroll = Math.max(0, this.diffScroll - Math.floor(viewH / 2));
-			this.invalidate();
-		} else if (matchesKey(data, "o")) {
+			this.rerender();
+		} else if (data === "o") {
 			const entry = this.entries[this.cursor];
 			if (entry) {
 				this.statusMsg = this.openFileInEditor(entry.path);
-				this.invalidate();
+				this.rerender();
 			}
-		} else if (matchesKey(data, "escape") || matchesKey(data, "q")) {
+		} else if (matchesKey(data, "escape") || data === "q") {
 			this.mode = "list";
 			this.statusMsg = "";
-			this.invalidate();
+			this.rerender();
 		}
 	}
 
 	private openFileInEditor(filePath: string): string {
-		// Use same logic as pi core: respect $VISUAL / $EDITOR
 		const editorCmd = process.env.VISUAL || process.env.EDITOR;
 		if (!editorCmd) {
 			this.statusMsg = "No editor configured (set $VISUAL or $EDITOR)";
@@ -122,19 +121,15 @@ class FilesViewComponent {
 		}
 
 		try {
-			// Stop TUI to release terminal for interactive editor
 			this.tui.stop();
 
-			// Split by space to support editor arguments (e.g., "code --wait")
 			const [editor, ...editorArgs] = editorCmd.split(" ");
 
-			// Spawn editor synchronously with inherited stdio for interactive editing
 			const result = spawnSync(editor, [...editorArgs, filePath], {
 				stdio: "inherit",
 				shell: process.platform === "win32",
 			});
 
-			// On non-zero exit, show status
 			if (result.status !== 0) {
 				this.statusMsg = `Editor exited with status ${result.status}`;
 			} else {
@@ -143,9 +138,7 @@ class FilesViewComponent {
 		} catch {
 			this.statusMsg = "Failed to open editor";
 		} finally {
-			// Restart TUI
 			this.tui.start();
-			// Force full re-render since external editor uses alternate screen
 			this.tui.requestRender(true);
 		}
 
@@ -176,7 +169,6 @@ class FilesViewComponent {
 	private renderList(width: number): string[] {
 		const { entries, theme: th } = this;
 		const visible = this.filteredEntries();
-		// Clamp cursor to visible range
 		const cursor = Math.min(this.cursor, Math.max(0, visible.length - 1));
 		const lines: string[] = [];
 
@@ -318,13 +310,18 @@ class FilesViewComponent {
 	}
 
 	private viewportHeight(): number {
-		// Terminal rows minus header (≈5) and footer (≈4) lines
 		return Math.max(5, (process.stdout.rows ?? 40) - 9);
 	}
 
 	invalidate(): void {
 		this.cachedWidth = undefined;
 		this.cachedLines = undefined;
+	}
+
+	/** Invalidate cache and request TUI re-render. */
+	private rerender(): void {
+		this.invalidate();
+		this.tui.requestRender();
 	}
 }
 
@@ -374,7 +371,6 @@ export default function diffFilesExtension(pi: any): void {
 	}
 
 	// ── write/edit tool_call ──────────────────────────────────────────────
-	// Record file paths the agent is about to touch
 	pi.on("tool_call", async (event: any, _ctx: any) => {
 		if (event.toolName === "write" || event.toolName === "edit") {
 			const fp = event.input?.path ?? event.input?.file_path ?? "";
@@ -394,8 +390,6 @@ export default function diffFilesExtension(pi: any): void {
 			return;
 		}
 
-		// ── bash tool_call ────────────────────────────────────────────────
-		// Snapshot git state before the bash command runs
 		if (event.toolName === "bash" && inGit) {
 			const snapshot = getGitDiff(config.cwd);
 			bashSnapshots.set(event.toolCallId, snapshot);
@@ -403,7 +397,6 @@ export default function diffFilesExtension(pi: any): void {
 	});
 
 	// ── bash tool_result ────────────────────────────────────────────────
-	// Diff current state vs snapshot to find new changes
 	pi.on("tool_result", async (event: any, _ctx: any) => {
 		if (event.toolName !== "bash") return;
 		if (event.isError) return;
@@ -414,14 +407,11 @@ export default function diffFilesExtension(pi: any): void {
 
 		const after = getGitDiff(config.cwd);
 
-		// Find entries in after that are new or changed compared to before
 		const newEntries: GitDiffSnapshot = new Map();
 		for (const [path, changeType] of after) {
 			if (!before.has(path)) {
-				// New entry — file wasn't in the before snapshot
 				newEntries.set(path, changeType);
 			} else if (before.get(path) !== changeType) {
-				// Changed type (e.g., was M, now A because the file was deleted and recreated)
 				newEntries.set(path, changeType);
 			}
 		}
@@ -443,11 +433,9 @@ export default function diffFilesExtension(pi: any): void {
 			: entries.filter((e: FileEntry) => e.changeType !== ChangeType.Deleted);
 
 		const lines: string[] = [];
-		// Flash header — briefly shows how many files changed this turn
 		lines.push(
 			`${colors.fgCreated}↯ ${addedCount} ${addedCount === 1 ? "file" : "files"} added this turn${colors.rst}`,
 		);
-		// Entries up to maxLines − 1 (the flash line takes one slot)
 		const shown = visible.slice(0, Math.max(1, config.maxLines - 1));
 		for (const e of shown) {
 			const prefix =
@@ -471,7 +459,6 @@ export default function diffFilesExtension(pi: any): void {
 	});
 
 	// ── turn_end ────────────────────────────────────────────────────────
-	// Flash widget briefly when new files appear, then settle to normal.
 	pi.on("turn_end", async (_event: any, ctx: any) => {
 		if (tracker.size === 0) return;
 
@@ -494,7 +481,6 @@ export default function diffFilesExtension(pi: any): void {
 	});
 
 	// ── session_start ───────────────────────────────────────────────────
-	// Reset state for new sessions
 	pi.on("session_start", async (_event: any, ctx: any) => {
 		tracker.clear();
 		bashSnapshots.clear();

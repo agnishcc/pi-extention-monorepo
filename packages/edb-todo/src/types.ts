@@ -8,6 +8,9 @@ export interface Task {
 	content: string;
 	status: TaskStatus;
 	priority: TaskPriority;
+	createdAt: number;
+	startedAt?: number;
+	completedAt?: number;
 }
 
 export interface TaskDetails {
@@ -18,7 +21,7 @@ export interface TaskDetails {
 
 export const STATUS_ICON: Record<TaskStatus, string> = {
 	pending: "○",
-	in_progress: "→",
+	in_progress: "●",
 	completed: "✓",
 };
 
