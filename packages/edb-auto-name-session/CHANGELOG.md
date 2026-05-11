@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-11
+
+### Changed
+- Auto-naming now runs asynchronously in the background instead of blocking the main thread. The `message_end` handler returns immediately, so the assistant can begin responding while the title generation is in flight.
+
 ## [0.6.0] - 2026-05-11
 
 ### Changed

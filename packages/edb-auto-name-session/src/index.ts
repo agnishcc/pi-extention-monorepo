@@ -52,25 +52,31 @@ export default function autoNameSessionExtension(pi: ExtensionAPI): void {
 
 		pending = true;
 		const token = sessionToken;
+		const hasUI = ctx.hasUI;
 
-		if (ctx.hasUI) {
+		if (hasUI) {
 			ctx.ui.notify("Auto-naming session…", "info");
 		}
 
-		try {
-			const name = await generateSessionName(prompt, ctx);
-			if (!name) return;
-			if (token !== sessionToken) return;
-			if (pi.getSessionName()) return;
-			pi.setSessionName(name);
-			if (ctx.hasUI) {
-				ctx.ui.notify(`Session named: ${name}`, "info");
-			}
-		} catch (error: unknown) {
-			console.error("[edb-auto-name-session] Failed to generate session name:", error);
-		} finally {
-			if (token === sessionToken) pending = false;
-		}
+		// Fire-and-forget: generate name asynchronously without blocking
+		// the main thread. The handler returns immediately, and the name
+		// is applied when the LLM call resolves in the background.
+		generateSessionName(prompt, ctx)
+			.then((name) => {
+				if (!name) return;
+				if (token !== sessionToken) return;
+				if (pi.getSessionName()) return;
+				pi.setSessionName(name);
+				if (hasUI) {
+					ctx.ui.notify(`Session named: ${name}`, "info");
+				}
+			})
+			.catch((error: unknown) => {
+				console.error("[edb-auto-name-session] Failed to generate session name:", error);
+			})
+			.finally(() => {
+				if (token === sessionToken) pending = false;
+			});
 	});
 }
 
