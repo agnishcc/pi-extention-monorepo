@@ -47,6 +47,6 @@ export function updateStatusBar(ctx: any): void {
 		ctx.ui.setStatus(STATUS_KEY, undefined);
 		return;
 	}
-	const label = snippets.length === 1 ? "1 snippet" : `${snippets.length} snippets`;
+	const label = String(snippets.length);
 	ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg("accent", `⊕ ${label}`));
 }
