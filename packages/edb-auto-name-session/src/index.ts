@@ -5,12 +5,17 @@ import { extractUserText, sanitizeSessionName, shouldArmAutoNaming } from "./tit
 const MODEL_PROVIDER = "opencode";
 const MODEL_ID = "big-pickle";
 
-const SYSTEM_PROMPT = `You create short session titles for coding and technical work.
+const SYSTEM_PROMPT = `You create searchable session titles for coding and technical work.
+The user uses these titles later to find old sessions, so prefer memorable, specific words over generic summaries.
 Return exactly one title based only on the user's first message.
+
 Rules:
 - Prefer 2 to 6 words
 - Use Title Case
-- Mention the task, feature, bug, or file focus when clear
+- Include the task, feature, bug, file, package, command, model, or error when clear
+- Avoid generic titles like Coding Help, Fix Bug, Update Code, or New Session
+- If the message is vague, conversational, or lacks a clear task, return a funny but compact coding-themed title
+- Funny fallback titles should be memorable, not random; examples: Mystery Bug Goblin, Keyboard Goblin Hour, Undefined Behavior Club
 - No quotes
 - No markdown
 - No labels like Title:
