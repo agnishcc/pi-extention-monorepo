@@ -1,0 +1,41 @@
+{
+	"name": "@agnishc/edb-compact-tools",
+	"version": "0.1.0",
+	"description": "Pi extension: compact outlined tool-call renderers with ctrl+o expansion",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"tools",
+		"renderer"
+	],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-compact-tools"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-compact-tools#readme",
+	"bugs": {
+		"url": "https://github.com/agnishcc/pi-extention-monorepo/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG.md"
+	],
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
+	}
+}
