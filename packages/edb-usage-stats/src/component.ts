@@ -1,5 +1,14 @@
 import { DynamicBorder, getSettingsListTheme } from "@earendil-works/pi-coding-agent";
-import { Container, Key, matchesKey, type SettingItem, SettingsList, Text, visibleWidth } from "@earendil-works/pi-tui";
+import {
+	Container,
+	Key,
+	Loader,
+	matchesKey,
+	type SettingItem,
+	SettingsList,
+	Text,
+	truncateToWidth,
+} from "@earendil-works/pi-tui";
 import { fetchAntigravityUsage } from "./providers/antigravity";
 import { fetchClaudeUsage } from "./providers/claude";
 import { fetchCodexUsage } from "./providers/codex";
@@ -117,6 +126,7 @@ export class UsageComponent {
 	private theme: any;
 	private modelRegistry: any;
 	private done: () => void;
+	private loader: Loader | null = null;
 
 	constructor(tui: { requestRender: () => void }, theme: any, modelRegistry: any, done: () => void) {
 		this.tui = tui;
@@ -124,7 +134,18 @@ export class UsageComponent {
 		this.modelRegistry = modelRegistry;
 		this.done = done;
 		this.settings = loadSettings();
+		this.startLoader();
 		this.load();
+	}
+
+	private startLoader(): void {
+		this.loader?.stop();
+		this.loader = new Loader(
+			this.tui as any,
+			(s: string) => this.theme.fg("accent", s),
+			(s: string) => this.theme.fg("muted", s),
+			"Fetching usage…",
+		);
 	}
 
 	private async load() {
@@ -137,6 +158,7 @@ export class UsageComponent {
 			return;
 		}
 
+		this.startLoader();
 		this.view = "loading";
 		this.tui.requestRender();
 
@@ -175,6 +197,8 @@ export class UsageComponent {
 		});
 
 		this.usages = usages.filter((u) => u.windows.length > 0 || !IGNORABLE_ERRORS.has(u.error ?? ""));
+		this.loader?.stop();
+		this.loader = null;
 		this.view = "usage";
 		this.tui.requestRender();
 	}
@@ -219,6 +243,20 @@ export class UsageComponent {
 		this.settingsView?.invalidate();
 	}
 
+	private severityColor(remainingPercent: number): "success" | "warning" | "error" {
+		if (remainingPercent <= 10) return "error";
+		if (remainingPercent <= 30) return "warning";
+		return "success";
+	}
+
+	private renderProgressBar(usedPercent: number, barWidth: number): string {
+		const t = this.theme;
+		const remaining = Math.max(0, 100 - usedPercent);
+		const color = this.severityColor(remaining);
+		const filled = Math.min(barWidth, Math.round((usedPercent / 100) * barWidth));
+		return t.fg(color, "█".repeat(filled)) + t.fg("dim", "░".repeat(barWidth - filled));
+	}
+
 	render(width: number): string[] {
 		if (this.view === "settings" && this.settingsView) {
 			return this.settingsView.render(width);
@@ -228,40 +266,27 @@ export class UsageComponent {
 
 	private renderUsage(width: number): string[] {
 		const t = this.theme;
-		const dim = (s: string) => t.fg("muted", s);
-		const bold = (s: string) => t.bold(s);
-		const accent = (s: string) => t.fg("accent", s);
-
-		const totalW = Math.min(55, width - 4);
-		const innerW = totalW - 4;
-		const hLine = "─".repeat(totalW - 2);
-
-		const box = (content: string) => {
-			const contentW = visibleWidth(content);
-			const pad = Math.max(0, innerW - contentW);
-			return dim("│ ") + content + " ".repeat(pad) + dim(" │");
-		};
-
+		const border = new DynamicBorder((s: string) => t.fg("border", s));
 		const lines: string[] = [];
-		lines.push(dim(`╭${hLine}╮`));
-		lines.push(box(bold(accent("AI Usage"))));
-		lines.push(dim(`├${hLine}┤`));
+
+		lines.push(...border.render(width));
+		lines.push(truncateToWidth(` ${t.fg("accent", t.bold("AI Usage"))}`, width));
 
 		if (this.view === "loading") {
-			lines.push(box(""));
-			lines.push(box(t.fg("dim", "  Fetching…")));
-			lines.push(box(""));
+			lines.push(...(this.loader ? this.loader.render(width) : [t.fg("muted", "  Fetching usage…")]));
 		} else if (this.usages.length === 0) {
-			lines.push(box(""));
-			lines.push(box(t.fg("dim", "  No providers enabled.")));
-			lines.push(box(t.fg("dim", "  Press ") + t.fg("accent", "s") + t.fg("dim", " to configure.")));
-			lines.push(box(""));
+			lines.push("");
+			lines.push(truncateToWidth(t.fg("dim", "  No providers enabled."), width));
+			lines.push(truncateToWidth(`  Press ${t.fg("accent", "s")}${t.fg("dim", " to configure.")}`, width));
+			lines.push("");
 		} else {
+			const barWidth = Math.min(42, Math.max(18, width - 28));
 			for (const u of this.usages) {
+				lines.push("");
 				const statusEmoji = getStatusEmoji(u.status);
-				const planStr = u.plan ? dim(` (${u.plan})`) : "";
+				const planStr = u.plan ? t.fg("dim", ` (${u.plan})`) : "";
 				const statusStr = statusEmoji ? ` ${statusEmoji}` : "";
-				lines.push(box(bold(u.displayName) + planStr + statusStr));
+				lines.push(truncateToWidth(`  ${t.fg("accent", u.displayName)}${planStr}${statusStr}`, width));
 
 				if (
 					u.status?.indicator &&
@@ -270,35 +295,35 @@ export class UsageComponent {
 					u.status.description
 				) {
 					const desc =
-						u.status.description.length > 40 ? `${u.status.description.substring(0, 37)}…` : u.status.description;
-					lines.push(box(t.fg("warning", `  ⚡ ${desc}`)));
+						u.status.description.length > 60 ? `${u.status.description.substring(0, 57)}…` : u.status.description;
+					lines.push(truncateToWidth(t.fg("warning", `    ⚡ ${desc}`), width));
 				}
 
 				if (u.error) {
-					lines.push(box(dim(`  ${u.error}`)));
+					lines.push(truncateToWidth(t.fg("warning", `    ${u.error}`), width));
 				} else if (u.windows.length === 0) {
-					lines.push(box(dim("  No data")));
+					lines.push(truncateToWidth(t.fg("dim", "    No data available"), width));
 				} else {
 					for (const w of u.windows) {
 						const remaining = Math.max(0, 100 - w.usedPercent);
-						const barW = 12;
-						const filled = Math.min(barW, Math.round((w.usedPercent / 100) * barW));
-						const empty = barW - filled;
-						const color = remaining <= 10 ? "error" : remaining <= 30 ? "warning" : "success";
-						const bar = t.fg(color, "█".repeat(filled)) + dim("░".repeat(empty));
-						const reset = w.resetDescription ? dim(` ⏱ ${w.resetDescription}`) : "";
-						lines.push(box(`  ${w.label.padEnd(7)} ${bar} ${remaining.toFixed(0).padStart(3)}%${reset}`));
+						const color = this.severityColor(remaining);
+						const isAtRisk = remaining <= 30;
+						const labelColor = isAtRisk ? color : "dim";
+						const bar = this.renderProgressBar(w.usedPercent, barWidth);
+						const usedStr = `${remaining.toFixed(0)}% left`;
+						lines.push(truncateToWidth(`    ${t.fg(labelColor, `${w.label}:`)}`, width));
+						lines.push(truncateToWidth(`    ${bar} ${t.fg(color, usedStr)}`, width));
+						if (w.resetDescription) {
+							lines.push(truncateToWidth(`    ${t.fg("dim", `Resets in ${w.resetDescription}`)}`, width));
+						}
 					}
 				}
-				lines.push(box(""));
 			}
+			lines.push("");
 		}
 
-		const footerHint = this.view === "loading" ? dim("Esc close") : dim("r refresh · s settings · Esc close");
-
-		lines.push(dim(`├${hLine}┤`));
-		lines.push(box(footerHint));
-		lines.push(dim(`╰${hLine}╯`));
+		lines.push(t.fg("dim", "  r refresh · s settings · Esc close"));
+		lines.push(...border.render(width));
 
 		return lines;
 	}
