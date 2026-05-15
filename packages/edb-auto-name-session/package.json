@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-auto-name-session",
-	"version": "0.10.5",
+	"version": "0.10.6",
 	"description": "Pi extension: replace Pi's first-message session label with a generated title",
 	"keywords": [
 		"pi-package",
