@@ -1,6 +1,8 @@
 import type { SessionContext } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { buildTotalContextText, formatMessageForDisplay } from "./index";
+import { type ContextTokenBreakdown, StatsTabContent } from "./stats-tab-content";
+import { formatTokens } from "./utils";
 
 const context = {
 	messages: [
@@ -45,6 +47,75 @@ const context = {
 	thinkingLevel: "off",
 	model: { provider: "anthropic", modelId: "claude-sonnet-4" },
 } satisfies SessionContext;
+
+// ── formatTokens ──────────────────────────────────────────────────────────────
+
+describe("formatTokens", () => {
+	it("formats token counts with k/M suffixes", () => {
+		expect(formatTokens(500)).toBe("500");
+		expect(formatTokens(1500)).toBe("2k");
+		expect(formatTokens(45_230)).toBe("45k");
+		expect(formatTokens(1_500_000)).toBe("1.5M");
+		expect(formatTokens(null)).toBe("N/A");
+		expect(formatTokens(undefined)).toBe("N/A");
+	});
+});
+
+// ── StatsTabContent ───────────────────────────────────────────────────────────
+
+describe("StatsTabContent", () => {
+	const breakdown: ContextTokenBreakdown = {
+		total: 45_000,
+		contextWindow: 200_000,
+		percent: 22.5,
+		systemPrompt: 12_000,
+		systemTools: 8_000,
+		toolCalls: 10_000,
+		messages: 14_000,
+		other: 1_000,
+	};
+
+	const dummyTheme = {
+		fg: (_color: string, text: string) => text,
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	} as any;
+
+	it("renders content without errors when breakdown is provided", () => {
+		const stats = new StatsTabContent(breakdown, dummyTheme);
+		const lines = stats.renderContent(80, 28);
+		expect(lines.length).toBe(28);
+		const text = lines.join("\n");
+		expect(text).toContain("Total Usage");
+		expect(text).toContain("System Prompt");
+		expect(text).toContain("Messages");
+		expect(text).toContain("Available");
+	});
+
+	it("shows fallback message when no breakdown", () => {
+		const stats = new StatsTabContent(null, dummyTheme);
+		const lines = stats.renderContent(80, 28);
+		const text = lines.join("\n");
+		expect(text).toContain("No context usage data available");
+	});
+
+	it("getFooterLeft shows usage stats", () => {
+		const stats = new StatsTabContent(breakdown, dummyTheme);
+		const footer = stats.getFooterLeft();
+		expect(footer).toContain("45k");
+		expect(footer).toContain("200k");
+		expect(footer).toContain("22.5%");
+	});
+
+	it("handleInput always returns false (no key consumption)", () => {
+		const stats = new StatsTabContent(breakdown, dummyTheme);
+		expect(stats.handleInput("q")).toBe(false);
+		expect(stats.handleInput("\x1b")).toBe(false);
+		expect(stats.handleInput("j")).toBe(false);
+	});
+});
+
+// ── context viewer formatting ─────────────────────────────────────────────────
 
 describe("context viewer formatting", () => {
 	it("formats Pi assistant tool calls and usage fields", () => {

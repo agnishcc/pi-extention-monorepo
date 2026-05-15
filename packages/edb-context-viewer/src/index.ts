@@ -1,12 +1,17 @@
 /**
- * pi-context-viewer
+ * edb-context-viewer
  *
- * Two commands for inspecting what the LLM sees:
+ * Single command for inspecting the full LLM context in a tabbed overlay:
  *
- *   /system-prompt-data  — shows the full system prompt in a scrollable overlay
- *   /total-context-data  — shows the complete LLM context (system prompt + all messages)
+ *   /context-viewer  — opens a tabbed overlay with:
+ *                       [Stats]  token distribution grid + category breakdown
+ *                       [System] full system prompt (scrollable)
+ *                       [Tools]  active tool definitions (scrollable)
+ *                       [Messages] all session messages (scrollable)
+ *                       [Full]   complete context dump (scrollable)
  *
- * Both overlays support: line numbers, scroll, live search (/), clipboard copy (y).
+ * Tab / Shift+Tab navigates between views.
+ * Each content tab supports: line numbers, scroll, live search (/), clipboard copy (y).
  */
 
 import {
@@ -17,7 +22,10 @@ import {
 	type SessionContext,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { ScrollableOverlay } from "./scrollable-overlay";
+import { ScrollableTabContent } from "./scrollable-tab-content.js";
+import { type ContextTokenBreakdown, StatsTabContent } from "./stats-tab-content.js";
+import { TabbedOverlay } from "./tabbed-overlay.js";
+import { formatTokens } from "./utils.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -156,66 +164,188 @@ export function buildTotalContextText(
 	return sections.join("\n");
 }
 
-/** Overlay options shared by both commands. */
+/** Format active tool definitions as readable text for the Tools tab. */
+function buildToolsText(activeToolDefs: { name: string; description?: string; parameters?: unknown }[]): string {
+	if (activeToolDefs.length === 0) return "(no active tools)";
+
+	const sections: string[] = [];
+	for (const tool of activeToolDefs) {
+		sections.push(`${"─".repeat(56)}`);
+		sections.push(`Tool: ${tool.name}`);
+		if (tool.description) {
+			sections.push(`Description: ${tool.description}`);
+		}
+		if (tool.parameters) {
+			sections.push("Parameters:");
+			const params = tool.parameters as any;
+			if (params?.properties) {
+				for (const [key, val] of Object.entries(params.properties)) {
+					const v = val as any;
+					const required = params.required?.includes(key) ? "" : " (optional)";
+					const type = v.type ?? "unknown";
+					const desc = v.description ? `: ${v.description}` : "";
+					sections.push(`  ${key} (${type}${required})${desc}`);
+				}
+			} else {
+				sections.push(`  ${JSON.stringify(tool.parameters, null, 2).split("\n").join("\n  ")}`);
+			}
+		}
+		sections.push("");
+	}
+
+	return sections.join("\n");
+}
+
+/** Build the token breakdown, scaling raw char-based estimates to match actual token count. */
+function buildTokenBreakdown(
+	systemPrompt: string,
+	activeToolDefs: unknown[],
+	branch: { type: string; message?: any; summary?: string }[],
+	usage: ContextUsage | undefined,
+): ContextTokenBreakdown | null {
+	if (!usage?.tokens || !usage.contextWindow) return null;
+
+	const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+
+	const systemRaw = estimateTokens(systemPrompt);
+	const toolDefsRaw = estimateTokens(JSON.stringify(activeToolDefs));
+
+	let msgTokensRaw = 0;
+	let toolCallTokensRaw = 0;
+	let toolResultTokensRaw = 0;
+
+	for (const entry of branch) {
+		if (entry.type === "message" && entry.message) {
+			const m = entry.message;
+
+			if (m.role === "user") {
+				if (typeof m.content === "string") msgTokensRaw += estimateTokens(m.content);
+				else if (Array.isArray(m.content)) {
+					for (const p of m.content) {
+						if (p?.type === "text") msgTokensRaw += estimateTokens(p.text ?? "");
+					}
+				}
+			} else if (m.role === "assistant") {
+				if (typeof m.content === "string") msgTokensRaw += estimateTokens(m.content);
+				else if (Array.isArray(m.content)) {
+					for (const p of m.content) {
+						if (p?.type === "text") msgTokensRaw += estimateTokens(p.text ?? "");
+						else if (p?.type === "toolCall") toolCallTokensRaw += estimateTokens(JSON.stringify(p));
+					}
+				}
+			} else if (m.role === "toolResult") {
+				if (Array.isArray(m.content)) {
+					for (const p of m.content) {
+						if (p?.type === "text") toolResultTokensRaw += estimateTokens(p.text ?? "");
+					}
+				}
+			} else if (m.role === "bashExecution") {
+				toolCallTokensRaw += estimateTokens(m.command ?? "");
+				toolResultTokensRaw += estimateTokens(m.output ?? "");
+			}
+		} else if (entry.type === "branch_summary" || entry.type === "compaction") {
+			msgTokensRaw += estimateTokens((entry as any).summary ?? "");
+		}
+	}
+
+	const totalRaw = systemRaw + toolDefsRaw + msgTokensRaw + toolCallTokensRaw + toolResultTokensRaw;
+	const ratio = totalRaw > 0 ? usage.tokens / totalRaw : 1;
+
+	const sys = Math.round(systemRaw * ratio);
+	const tools = Math.round(toolDefsRaw * ratio);
+	const msgs = Math.round(msgTokensRaw * ratio);
+	const toolCalls = Math.round((toolCallTokensRaw + toolResultTokensRaw) * ratio);
+	const accounted = sys + tools + msgs + toolCalls;
+
+	return {
+		total: usage.tokens,
+		contextWindow: usage.contextWindow,
+		percent: usage.percent ?? (usage.tokens / usage.contextWindow) * 100,
+		systemPrompt: sys,
+		systemTools: tools,
+		toolCalls,
+		messages: msgs,
+		other: Math.max(0, usage.tokens - accounted),
+	};
+}
+
+/** Overlay options shared across all tabs. */
 const OVERLAY_OPTIONS = {
 	overlay: true,
 	overlayOptions: {
 		anchor: "center" as const,
 		width: "90%" as const,
 		minWidth: 60,
-		maxHeight: "80%" as const,
+		maxHeight: "90%" as const,
 	},
 };
 
 // ── Extension ──────────────────────────────────────────────────────────────────
 
 export default function contextViewerExtension(pi: ExtensionAPI): void {
-	// ── /system-prompt-data ──
-	pi.registerCommand("system-prompt-data", {
-		description: "Show the full system prompt in a scrollable popup",
+	pi.registerCommand("context-viewer", {
+		description: "Inspect context usage, system prompt, tools, messages, and full LLM context in a tabbed overlay",
 		handler: async (_args: string, ctx: ExtensionCommandContext) => {
 			if (!ctx.hasUI) return;
 
-			const systemPrompt = ctx.getSystemPrompt();
-			if (!systemPrompt) {
-				ctx.ui.notify("No system prompt available yet. Send a message first.", "warning");
-				return;
-			}
-
-			const lineCount = systemPrompt.split("\n").length;
-			const charCount = systemPrompt.length;
-
-			await ctx.ui.custom<void>((_tui, theme, _keybindings, done) => {
-				const displayLines = buildNumberedLines(systemPrompt, theme);
-				return new ScrollableOverlay({
-					title: "System Prompt",
-					subtitle: `${charCount.toLocaleString()} chars · ${lineCount} lines`,
-					rawText: systemPrompt,
-					displayLines,
-					theme,
-					done,
-				});
-			}, OVERLAY_OPTIONS);
-		},
-	});
-
-	// ── /total-context-data ──
-	pi.registerCommand("total-context-data", {
-		description: "Show the complete LLM context (system prompt + all messages)",
-		handler: async (_args: string, ctx: ExtensionCommandContext) => {
-			if (!ctx.hasUI) return;
-
+			// ── Gather data ─────────────────────────────────────────────────────
 			const systemPrompt = ctx.getSystemPrompt() ?? "";
-			const context = buildSessionContext(ctx.sessionManager.getEntries(), ctx.sessionManager.getLeafId());
-			const fullText = buildTotalContextText(systemPrompt, context, ctx.getContextUsage(), ctx.model);
+			const usage = ctx.getContextUsage();
 
+			const allTools = pi.getAllTools();
+			const activeToolNames = pi.getActiveTools();
+			const activeToolDefs = allTools.filter((t) => activeToolNames.includes(t.name));
+
+			const branch = ctx.sessionManager.getBranch();
+			const context = buildSessionContext(ctx.sessionManager.getEntries(), ctx.sessionManager.getLeafId());
+
+			const breakdown = buildTokenBreakdown(systemPrompt, activeToolDefs, branch, usage);
+			const toolsText = buildToolsText(activeToolDefs);
+			const fullText = buildTotalContextText(systemPrompt, context, usage, ctx.model);
+
+			// ── Subtitle ────────────────────────────────────────────────────────
+			const subtitle =
+				usage?.tokens != null && usage.contextWindow != null
+					? `${formatTokens(usage.tokens)} / ${formatTokens(usage.contextWindow)} (${(usage.percent ?? (usage.tokens / usage.contextWindow) * 100).toFixed(1)}%)`
+					: "no usage data yet";
+
+			// ── Build and open the overlay ──────────────────────────────────────
 			await ctx.ui.custom<void>((_tui, theme, _keybindings, done) => {
-				const displayLines = buildNumberedLines(fullText, theme);
-				return new ScrollableOverlay({
-					title: "Total Context Data",
-					subtitle: `${fullText.length.toLocaleString()} chars · ${displayLines.length} lines`,
-					rawText: fullText,
-					displayLines,
+				// Build messages text for the Messages tab
+				const messagesLines: string[] = [];
+				if (context.messages.length > 0) {
+					for (let i = 0; i < context.messages.length; i++) {
+						messagesLines.push(...formatMessageForDisplay(context.messages[i]!, i));
+					}
+				} else {
+					messagesLines.push("(no messages yet)");
+				}
+				const messagesText = messagesLines.join("\n");
+
+				const tabs = [
+					new StatsTabContent(breakdown, theme),
+					new ScrollableTabContent(
+						{ rawText: systemPrompt, displayLines: buildNumberedLines(systemPrompt, theme), theme },
+						"System",
+					),
+					new ScrollableTabContent(
+						{ rawText: toolsText, displayLines: buildNumberedLines(toolsText, theme), theme },
+						"Tools",
+					),
+					new ScrollableTabContent(
+						{ rawText: messagesText, displayLines: buildNumberedLines(messagesText, theme), theme },
+						"Messages",
+					),
+					new ScrollableTabContent(
+						{ rawText: fullText, displayLines: buildNumberedLines(fullText, theme), theme },
+						"Full",
+					),
+				];
+
+				return new TabbedOverlay({
+					title: "Context Viewer",
+					subtitle,
+					tabs,
 					theme,
 					done,
 				});

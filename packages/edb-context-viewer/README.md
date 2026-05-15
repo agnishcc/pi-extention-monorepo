@@ -1,25 +1,45 @@
 # @agnishc/edb-context-viewer
 
-Pi CLI extension for inspecting the LLM context. Two commands let you see exactly what the model sees:
+Pi CLI extension for inspecting the full LLM context. A single command opens a tabbed overlay where you can explore token usage, the system prompt, tool definitions, messages, and the complete context — all in one place.
 
-- **`/system-prompt-data`** — full system prompt with line numbers
-- **`/total-context-data`** — complete LLM context (system prompt + all messages + usage stats)
+## Command
 
-Both open as scrollable overlay popups with search and clipboard copy.
+```
+/context-viewer
+```
 
-## Commands
+Opens a tabbed overlay with five views you can navigate using `Tab` / `Shift+Tab`.
 
-| Command | What it shows |
-|---------|--------------|
-| `/system-prompt-data` | The full system prompt (includes tools, skills, guidelines, AGENTS.md, etc.) |
-| `/total-context-data` | System prompt + all messages (user, assistant, tool calls/results) + context usage stats |
+## Tabs
+
+| Tab | What it shows |
+|-----|--------------|
+| **Stats** | Token distribution grid (10×5 colored blocks) + per-category breakdown table |
+| **System** | The full system prompt (includes tools, skills, guidelines, AGENTS.md, etc.) |
+| **Tools** | All active tool definitions with descriptions and parameter schemas |
+| **Messages** | All session messages (user, assistant, tool calls/results) |
+| **Full** | Complete context dump: system prompt + messages + usage stats |
+
+### Stats tab
+
+Visualizes how the context window is used, broken down by category:
+
+- **System Prompt** — the static system prompt text
+- **System Tools** — tool definition schemas
+- **Tool Calls** — tool call arguments and results
+- **Messages** — user/assistant conversation text
+- **Available** — unused context window space
+
+Token counts are estimated using a 4-chars-per-token heuristic, then scaled proportionally to match the actual total reported by the API.
 
 ## Controls
 
 | Key | Action |
 |-----|--------|
-| `↑` / `k` | Scroll up |
-| `↓` / `j` | Scroll down |
+| `Tab` | Next tab |
+| `Shift+Tab` | Previous tab |
+| `↑` / `k` | Scroll up (content tabs) |
+| `↓` / `j` | Scroll down (content tabs) |
 | `Page Up` / `Ctrl+B` | Scroll up one page |
 | `Page Down` / `Ctrl+F` | Scroll down one page |
 | `Ctrl+U` / `Ctrl+D` | Scroll half page |
@@ -28,7 +48,7 @@ Both open as scrollable overlay popups with search and clipboard copy.
 | `/` | Search (live matching as you type) |
 | `n` / `N` | Next / previous match |
 | `y` | Copy full content to clipboard |
-| `Escape` / `q` | Close popup |
+| `Escape` / `q` | Close overlay |
 
 ## Install
 
