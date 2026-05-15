@@ -1,7 +1,19 @@
-import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
-import { priorityColor, priorityLabel } from "./state";
-import type { Task, TaskDetails } from "./types";
-import { PRIORITY_ORDER } from "./types";
+import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
+import {
+	Container,
+	matchesKey,
+	type SettingItem,
+	SettingsList,
+	Spacer,
+	Text,
+	truncateToWidth,
+} from "@earendil-works/pi-tui";
+import type { TodoConfig } from "./config.js";
+import { saveTodoConfig } from "./config.js";
+import type { FileTaskStore } from "./file-store.js";
+import { priorityColor, priorityLabel, renderTaskListResult } from "./state.js";
+import type { Task, TaskDetails } from "./types.js";
+import { PRIORITY_ORDER } from "./types.js";
 
 // ── /todos interactive viewer ──────────────────────────────────────────────────
 
@@ -28,19 +40,16 @@ export class TodoViewComponent {
 			this.onClose();
 			return;
 		}
-
 		if (matchesKey(data, "up") || data === "k") {
 			if (this.cursorIndex > 0) this.cursorIndex--;
 			this.invalidate();
 			return;
 		}
-
 		if (matchesKey(data, "down") || data === "j") {
 			if (this.cursorIndex < this.flatTasks.length - 1) this.cursorIndex++;
 			this.invalidate();
 			return;
 		}
-
 		if (data === "c") {
 			this.showCompleted = !this.showCompleted;
 			this.rebuildFlatTasks();
@@ -48,13 +57,11 @@ export class TodoViewComponent {
 			this.invalidate();
 			return;
 		}
-
 		if (matchesKey(data, "home") || data === "g") {
 			this.cursorIndex = 0;
 			this.invalidate();
 			return;
 		}
-
 		if (matchesKey(data, "end") || data === "G") {
 			this.cursorIndex = Math.max(0, this.flatTasks.length - 1);
 			this.invalidate();
@@ -162,7 +169,6 @@ export class TodoViewComponent {
 		const th = this.theme;
 		const isFocused = flatIdx === this.cursorIndex;
 
-		// ── Status icon ──
 		let icon: string;
 		if (task.status === "completed") {
 			icon = th.fg("success", "✓");
@@ -172,11 +178,9 @@ export class TodoViewComponent {
 			icon = th.fg("dim", "○");
 		}
 
-		// ── Priority badge ──
 		const pColor = priorityColor(task.priority);
 		const pLabel = th.fg(pColor, priorityLabel(task.priority));
 
-		// ── Content ──
 		let contentText: string;
 		if (task.status === "completed") {
 			contentText = th.fg("dim", th.strikethrough(task.content));
@@ -186,13 +190,25 @@ export class TodoViewComponent {
 			contentText = th.fg("muted", task.content);
 		}
 
-		// ── ID hint ──
 		const idHint = th.fg("dim", ` [${task.id}]`);
-
-		// ── Cursor indicator ──
 		const cursor = isFocused ? th.fg("accent", "❯") : " ";
 
-		return [truncateToWidth(`  ${cursor} ${icon} ${pLabel}  ${contentText}${idHint}`, width)];
+		// Dependency hint
+		let depHint = "";
+		if (task.blockedBy.length > 0) {
+			const openBlockers = task.blockedBy.filter((_bid) => {
+				// We only have the flat list, use basic check
+				return true; // shown for visibility
+			});
+			if (openBlockers.length > 0) {
+				depHint = th.fg("dim", ` ← blocked by ${openBlockers.map((id) => `#${id}`).join(", ")}`);
+			}
+		}
+		if (task.blocks.length > 0) {
+			depHint += th.fg("dim", ` → blocks ${task.blocks.map((id) => `#${id}`).join(", ")}`);
+		}
+
+		return [truncateToWidth(`  ${cursor} ${icon} ${pLabel}  ${contentText}${idHint}${depHint}`, width)];
 	}
 
 	private rebuildFlatTasks(): void {
@@ -201,7 +217,6 @@ export class TodoViewComponent {
 			.filter((t) => t.status === "pending")
 			.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
 		const done = this.showCompleted ? this.tasks.filter((t) => t.status === "completed") : [];
-
 		this.flatTasks = [...inProgress, ...pending, ...done];
 	}
 
@@ -210,55 +225,177 @@ export class TodoViewComponent {
 		this.cachedLines = undefined;
 	}
 
-	// ── Tool result rendering (inline, used in both tools) ─────────────────────
+	// ── Static tool result renderer ────────────────────────────────────────────
 
 	static renderTaskResult(details: TaskDetails | undefined, expanded: boolean, theme: any): any {
-		if (!details?.tasks?.length) {
-			return new Text(theme.fg("dim", "Task list cleared"), 0, 0);
-		}
-
-		const list = details.tasks;
-		const doneCount = list.filter((t) => t.status === "completed").length;
-		const inProgCount = list.filter((t) => t.status === "in_progress").length;
-		const total = list.length;
-
-		// ── Summary line ──
-		const parts: string[] = [];
-		if (inProgCount > 0) parts.push(theme.fg("accent", `● ${inProgCount} active`));
-		parts.push(theme.fg("success", `✓ ${doneCount}/${total} done`));
-		let output = parts.join("  ");
-
-		// ── Task lines ──
-		const display = expanded ? list : list.slice(0, 5);
-		for (const t of display) {
-			let icon: string;
-			if (t.status === "completed") {
-				icon = theme.fg("success", "✓");
-			} else if (t.status === "in_progress") {
-				icon = theme.fg("accent", "●");
-			} else {
-				icon = theme.fg("dim", "○");
-			}
-
-			const pColor = priorityColor(t.priority);
-			const pLabel = theme.fg(pColor, priorityLabel(t.priority));
-
-			let content: string;
-			if (t.status === "completed") {
-				content = theme.fg("dim", theme.strikethrough(t.content));
-			} else if (t.status === "in_progress") {
-				content = theme.fg("text", theme.bold(t.content));
-			} else {
-				content = theme.fg("muted", t.content);
-			}
-
-			output += `\n${icon} ${pLabel}  ${content}`;
-		}
-
-		if (!expanded && list.length > 5) {
-			output += `\n${theme.fg("dim", `... ${list.length - 5} more`)}`;
-		}
-
-		return new Text(output, 0, 0);
+		return renderTaskListResult(details?.tasks ?? [], expanded, theme);
 	}
+}
+
+// ── Settings panel ──────────────────────────────────────────────────────────────
+
+export async function openTodoSettings(ui: any, cfg: TodoConfig, cwd: string, clearDelayTurns: number): Promise<void> {
+	await ui.custom((_tui: any, theme: any, _kb: any, done: (r: undefined) => void) => {
+		const items: SettingItem[] = [
+			{
+				id: "taskScope",
+				label: "Task storage",
+				description:
+					"memory: tasks live only in memory, lost when session ends. " +
+					"session: persisted per session (tasks-<sessionId>.json), survives resume. " +
+					"project: shared across all sessions (tasks.json). " +
+					"Takes effect on next session start.",
+				currentValue: cfg.taskScope ?? "session",
+				values: ["memory", "session", "project"],
+			},
+			{
+				id: "autoClearCompleted",
+				label: "Auto-clear completed tasks",
+				description:
+					"never: completed tasks stay visible until manually cleared. " +
+					"on_list_complete: cleared automatically after all tasks are done. " +
+					"on_task_complete: each task cleared shortly after it completes. " +
+					`Clearing lags ~${clearDelayTurns} turns.`,
+				currentValue: cfg.autoClearCompleted ?? "on_list_complete",
+				values: ["never", "on_list_complete", "on_task_complete"],
+			},
+		];
+
+		const list = new SettingsList(
+			items,
+			10,
+			getSettingsListTheme(),
+			(id, newValue) => {
+				if (id === "taskScope") {
+					cfg.taskScope = newValue as TodoConfig["taskScope"];
+					saveTodoConfig(cwd, cfg);
+				}
+				if (id === "autoClearCompleted") {
+					cfg.autoClearCompleted = newValue as TodoConfig["autoClearCompleted"];
+					saveTodoConfig(cwd, cfg);
+				}
+			},
+			() => done(undefined),
+		);
+
+		class SettingsPanel extends Container {
+			handleInput(data: string) {
+				list.handleInput(data);
+			}
+		}
+
+		const root = new SettingsPanel();
+		root.addChild(new Text(theme.bold(theme.fg("accent", "⚙  Todo Settings")), 0, 0));
+		root.addChild(new Spacer(1));
+		root.addChild(list);
+		return root;
+	});
+}
+
+// ── /todos detailed task viewer (select-based) ─────────────────────────────────
+
+export async function openTodosMenu(
+	ui: any,
+	store: FileTaskStore,
+	cfg: TodoConfig,
+	cwd: string,
+	onTaskUpdate: (taskId: string, status?: string) => void,
+): Promise<void> {
+	const AUTO_CLEAR_DELAY = 4;
+
+	const mainMenu = async (): Promise<void> => {
+		const tasks = store.list();
+		const completedCount = tasks.filter((t) => t.status === "completed").length;
+
+		const choices: string[] = [`View all tasks (${tasks.length})`];
+		if (completedCount > 0) choices.push(`Clear completed (${completedCount})`);
+		if (tasks.length > 0) choices.push(`Clear all (${tasks.length})`);
+		choices.push("⚙ Settings");
+
+		const choice = await ui.select("Tasks", choices);
+		if (!choice) return;
+
+		if (choice.startsWith("View")) {
+			return viewTasks();
+		} else if (choice.startsWith("Clear completed")) {
+			store.clearCompleted();
+			store.deleteFileIfEmpty();
+			onTaskUpdate("", undefined);
+			return mainMenu();
+		} else if (choice.startsWith("Clear all")) {
+			store.clearAll();
+			store.deleteFileIfEmpty();
+			onTaskUpdate("", undefined);
+			return mainMenu();
+		} else if (choice.startsWith("⚙")) {
+			await openTodoSettings(ui, cfg, cwd, AUTO_CLEAR_DELAY);
+			return mainMenu();
+		}
+	};
+
+	const viewTasks = async (): Promise<void> => {
+		const tasks = store.list();
+		if (tasks.length === 0) {
+			await ui.select("No tasks", ["← Back"]);
+			return mainMenu();
+		}
+
+		const icon = (status: string) => {
+			if (status === "completed") return "✔";
+			if (status === "in_progress") return "◼";
+			return "◻";
+		};
+
+		const choices = tasks.map((t) => `${icon(t.status)} #${t.id} [${t.status}] ${t.content}`);
+		choices.push("← Back");
+
+		const selected = await ui.select("Tasks", choices);
+		if (!selected || selected === "← Back") return mainMenu();
+
+		const match = selected.match(/#([a-z0-9]+)/);
+		if (match) return viewTaskDetail(match[1]);
+		return viewTasks();
+	};
+
+	const viewTaskDetail = async (taskId: string): Promise<void> => {
+		const task = store.get(taskId);
+		if (!task) return viewTasks();
+
+		const actions: string[] = [];
+		if (task.status === "pending") actions.push("▸ Start (in_progress)");
+		if (task.status === "in_progress") actions.push("✓ Complete");
+		actions.push("✗ Delete");
+		actions.push("← Back");
+
+		const deps: string[] = [];
+		if (task.blockedBy.length > 0) deps.push(`Blocked by: ${task.blockedBy.map((id) => `#${id}`).join(", ")}`);
+		if (task.blocks.length > 0) deps.push(`Blocks: ${task.blocks.map((id) => `#${id}`).join(", ")}`);
+
+		const detailLines = [
+			`#${task.id} [${task.status}] ${task.content}`,
+			task.description ? `\n${task.description}` : "",
+			deps.length > 0 ? `\n${deps.join(" | ")}` : "",
+		]
+			.filter(Boolean)
+			.join("");
+
+		const action = await ui.select(detailLines, actions);
+
+		if (action === "▸ Start (in_progress)") {
+			store.update(taskId, { status: "in_progress" });
+			onTaskUpdate(taskId, "in_progress");
+			return viewTasks();
+		} else if (action === "✓ Complete") {
+			store.update(taskId, { status: "completed" });
+			onTaskUpdate(taskId, "completed");
+			return viewTasks();
+		} else if (action === "✗ Delete") {
+			store.update(taskId, { status: "deleted" });
+			onTaskUpdate(taskId, "deleted");
+			return viewTasks();
+		}
+		return viewTasks();
+	};
+
+	await mainMenu();
 }

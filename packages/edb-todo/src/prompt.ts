@@ -1,16 +1,17 @@
-import { priorityLabel, store } from "./state";
-import { PRIORITY_ORDER } from "./types";
+import type { FileTaskStore } from "./file-store.js";
+import { priorityLabel } from "./state.js";
+import { PRIORITY_ORDER } from "./types.js";
 
 // ── System prompt injection ────────────────────────────────────────────────────
 
-export function buildSystemPromptBlock(): string {
+export function buildSystemPromptBlock(store: FileTaskStore): string {
 	const active = store.activeTasks();
 	if (active.length === 0) return "";
 
 	const lines: string[] = [
 		"## Current Task List",
 		"",
-		"You have the following tasks. Update them with `todo_write` as you work:",
+		"You have the following tasks. Update them with `TaskCreate` / `TaskUpdate` as you work:",
 		"",
 	];
 
@@ -23,12 +24,13 @@ export function buildSystemPromptBlock(): string {
 		const icon = t.status === "in_progress" ? "●" : "○";
 		const pLabel = `[${priorityLabel(t.priority)}]`;
 		const suffix = t.status === "in_progress" ? "  ← in progress" : "";
-		lines.push(`${icon} ${pLabel} ${t.content}${suffix}`);
+		const depStr = t.blockedBy.length > 0 ? ` [blocked by ${t.blockedBy.map((id) => `#${id}`).join(", ")}]` : "";
+		lines.push(`${icon} [${t.id}] ${pLabel} ${t.content}${suffix}${depStr}`);
 	}
 
-	const doneCount = store.tasks.filter((t) => t.status === "completed").length;
+	const doneCount = store.list().filter((t) => t.status === "completed").length;
 	if (doneCount > 0) {
-		lines.push("", `${doneCount}/${store.tasks.length} tasks completed.`);
+		lines.push("", `${doneCount}/${store.list().length} tasks completed.`);
 	}
 
 	return lines.join("\n");
@@ -36,12 +38,14 @@ export function buildSystemPromptBlock(): string {
 
 // ── LLM text formatter ─────────────────────────────────────────────────────────
 
-export function formatListForLLM(): string {
-	if (store.tasks.length === 0) return "Task list is empty.";
-	return store.tasks
+export function formatListForLLM(store: FileTaskStore): string {
+	const tasks = store.list();
+	if (tasks.length === 0) return "Task list is empty.";
+	return tasks
 		.map((t) => {
 			const icon = t.status === "in_progress" ? "●" : t.status === "completed" ? "✓" : "○";
-			return `${icon} [${priorityLabel(t.priority)}] [${t.id}] ${t.content}`;
+			const dep = t.blockedBy.length > 0 ? ` [blocked by ${t.blockedBy.map((id) => `#${id}`).join(", ")}]` : "";
+			return `${icon} [${priorityLabel(t.priority)}] [${t.id}] ${t.content}${dep}`;
 		})
 		.join("\n");
 }
