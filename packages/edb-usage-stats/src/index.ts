@@ -19,7 +19,6 @@ export default function usageStatsExtension(pi: ExtensionAPI): void {
 		description: "Show AI provider token and rate usage",
 		handler: async (_args: string, ctx: ExtensionCommandContext) => {
 			if (!ctx.hasUI) return;
-			await ctx.waitForIdle();
 
 			await (ctx.ui as any).custom(
 				(tui: any, theme: any, _keybindings: any, done: () => void) => {
