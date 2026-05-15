@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.5] - 2026-05-15
 
 ### Changed
 - Replaced fixed-width 55-char box layout with `DynamicBorder` (full terminal width, adapts automatically)

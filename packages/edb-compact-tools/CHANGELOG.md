@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.5] - 2026-05-15
 
 ### Changed
 - Brightened call label and status summary colors (`dim`/`muted` → `toolOutput`) for improved legibility

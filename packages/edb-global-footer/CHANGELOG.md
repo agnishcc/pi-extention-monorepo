@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.5] - 2026-05-15
 
 ### Changed
 - Working indicator no longer includes its own spinner frame in the message — removed double-spinner (the Loader renders the spinner via `setWorkingIndicator`)

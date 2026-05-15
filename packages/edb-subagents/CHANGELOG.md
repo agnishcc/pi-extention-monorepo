@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.5] - 2026-05-15
 
 ### Changed
 - Added `promptSnippet` to all three tools (`Agent`, `get_subagent_result`, `steer_subagent`) so they appear in the system prompt's Available tools section
