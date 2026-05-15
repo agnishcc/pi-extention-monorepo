@@ -1,0 +1,52 @@
+{
+	"name": "@agnishc/edb-subagents",
+	"version": "0.8.2",
+	"description": "Pi extension: Claude Code-style autonomous sub-agents with live widget, parallel execution, mid-run steering, and custom agent types",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"edb",
+		"subagents",
+		"agents"
+	],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-subagents"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-subagents#readme",
+	"bugs": {
+		"url": "https://github.com/agnishcc/pi-extention-monorepo/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"test": "vitest run"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG.md"
+	],
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-agent-core": "*",
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*",
+		"typebox": "*"
+	},
+	"dependencies": {
+		"croner": "^10.0.1",
+		"nanoid": "^5.0.0"
+	}
+}
