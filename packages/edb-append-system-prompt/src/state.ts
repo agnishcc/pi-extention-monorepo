@@ -6,7 +6,7 @@ import type { Snippet } from "./types";
 
 export let snippets: Snippet[] = [];
 
-export const STATUS_KEY = "sys-prompt";
+export const STATUS_KEY = "prompt-inject";
 export const ENTRY_TYPE = "sys-prompt-snippets";
 
 // ── State helpers ──────────────────────────────────────────────────────────────

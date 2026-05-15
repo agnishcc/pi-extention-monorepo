@@ -11,7 +11,7 @@
  *   - Delete individual snippets
  *   - Persists across /reload via session storage — scoped to this session only
  *
- * Command: /sys-prompt
+ * Command: /prompt-inject
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -42,7 +42,7 @@ export default function sysPromptExtension(pi: ExtensionAPI): void {
 		return { systemPrompt: `${event.systemPrompt}\n\n${addition}` };
 	});
 
-	pi.registerCommand("sys-prompt", {
+	pi.registerCommand("prompt-inject", {
 		description: "Manage system prompt snippets — add, view, and delete",
 		handler: async (_args, ctx: ExtensionCommandContext) => {
 			if (!ctx.hasUI) return;
