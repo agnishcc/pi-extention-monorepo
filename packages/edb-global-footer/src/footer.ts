@@ -17,7 +17,7 @@ import type { GitStatus } from "./types";
 // Common uses:
 //   - "extmgr" - package manager status ("15 pkgs • auto update off")
 //   - Keys for extensions whose status you want to hide
-const STATUS_KEY_BLACKLIST = new Set<string>(["extmgr"]);
+const STATUS_KEY_BLACKLIST = new Set<string>(["extmgr", "sm"]);
 
 // ── Live state types ───────────────────────────────────────────────────────────
 
