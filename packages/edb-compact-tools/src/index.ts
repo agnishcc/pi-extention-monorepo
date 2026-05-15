@@ -30,7 +30,7 @@ type BuiltinTool = {
 
 const MAX_COLLAPSED_TEXT = 120;
 const MAX_EXPANDED_LINES = 4000;
-const MAX_LINE_CHARS = 180;
+const MAX_LINE_CHARS = 120;
 const TOOL_EXECUTION_PATCH_SYMBOL = Symbol.for("edb-compact-tools.tool-execution-patch");
 const USER_MESSAGE_PATCH_SYMBOL = Symbol.for("edb-compact-tools.user-message-patch");
 const ASSISTANT_MESSAGE_PATCH_SYMBOL = Symbol.for("edb-compact-tools.assistant-message-patch");
@@ -209,7 +209,7 @@ class ToolBlock {
 			const isLast = index === this.lines.length - 1;
 			return isLast ? this.renderBottom(line, renderWidth) : this.renderBody(line, renderWidth);
 		});
-		return [separator, ...block];
+		return [separator, "", ...block, ""];
 	}
 
 	invalidate(): void {}
@@ -250,7 +250,7 @@ class ToolBlock {
 function topLine(toolName: string, theme: CompactTheme, label: string): string {
 	const color = toolColor(toolName);
 	const title = `${toolIcon(toolName)} ${toolName}`;
-	return `${theme.fg(color, theme.bold(title))} ${theme.fg("dim", label)}`;
+	return `${theme.fg(color, theme.bold(title))} ${theme.fg("toolOutput", label)}`;
 }
 
 function midLine(_toolName: string, theme: CompactTheme, text: string): string {
@@ -269,11 +269,6 @@ function toolText(
 	borderColor?: string,
 ): ToolBlock {
 	return new ToolBlock(kind, toolName, lines, theme, borderColor);
-}
-
-function toolBg(theme: CompactTheme, text: string, state: "pending" | "success" | "error"): string {
-	const token = state === "pending" ? "toolPendingBg" : state === "error" ? "toolErrorBg" : "toolSuccessBg";
-	return theme.bg ? theme.bg(token, text) : text;
 }
 
 function renderCall(_toolName: string, _args: any, _theme: CompactTheme, _context: any) {
@@ -305,7 +300,7 @@ function renderResult(toolName: string, result: any, options: any, theme: Compac
 	const bottom = bottomLine(
 		toolName,
 		theme,
-		`${theme.fg(statusColor, statusIcon)} ${theme.fg("muted", summary)}${expandHint}`,
+		`${theme.fg(statusColor, statusIcon)} ${theme.fg("toolOutput", summary)}${expandHint}`,
 	);
 	const borderColor = failed ? "error" : "success";
 
@@ -322,14 +317,8 @@ function renderResult(toolName: string, result: any, options: any, theme: Compac
 		lines.push(midLine(toolName, theme, theme.fg("dim", `… ${omitted} more line(s)`)));
 	}
 	lines.unshift(top);
-	lines.push(bottomLine(toolName, theme, `${theme.fg(statusColor, statusIcon)} ${theme.fg("muted", summary)}`));
-	return toolText(
-		"full",
-		toolName,
-		lines.map((line) => toolBg(theme, line, failed ? "error" : "success")),
-		theme,
-		borderColor,
-	);
+	lines.push(bottomLine(toolName, theme, `${theme.fg(statusColor, statusIcon)} ${theme.fg("toolOutput", summary)}`));
+	return toolText("full", toolName, lines, theme, borderColor);
 }
 
 function padVisible(text: string, width: number): string {
