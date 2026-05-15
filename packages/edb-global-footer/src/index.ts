@@ -91,4 +91,12 @@ export default function globalFooterExtension(pi: ExtensionAPI): void {
 		tpsCalculator.onMessageEnd(event.message);
 		requestRender();
 	});
+
+	pi.on("tool_execution_start", () => {
+		tpsCalculator.onToolStart();
+	});
+
+	pi.on("tool_execution_end", () => {
+		tpsCalculator.onToolEnd();
+	});
 }

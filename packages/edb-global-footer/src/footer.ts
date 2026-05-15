@@ -101,17 +101,16 @@ export function createFooterRenderer(
 				}
 
 				// Build three groups separated by pipes
-				// Group 1: ↑input ↓output ⚡tps
+				// Group 1: ↑input ↓output
 				// Group 2: Rcache Wcache $cost
 				// Group 3: context%
 				const { tps } = tpsState;
 				const showTps = tps > 0;
 
-				// Group 1: Read/Write + TPS
+				// Group 1: Read/Write tokens
 				const group1Parts: string[] = [];
 				if (totalInput) group1Parts.push(`↑${formatTokens(totalInput)}`);
 				if (totalOutput) group1Parts.push(`↓${formatTokens(totalOutput)}`);
-				if (showTps) group1Parts.push(theme.fg("accent", `⚡${formatTps(tps)}`));
 				const group1 = group1Parts.length > 0 ? group1Parts.join(" ") : null;
 
 				// Group 2: Cache + Price
@@ -154,6 +153,10 @@ export function createFooterRenderer(
 				// Model + thinking level with icons
 				const model = ctx.model;
 				const rightPartsLine2: string[] = [];
+				if (showTps) {
+					const tpsColor = tps < 30 ? "error" : tps < 50 ? "warning" : "success";
+					rightPartsLine2.push(`${theme.fg("fg", "⚡")}${theme.fg(tpsColor, formatTps(tps))}`);
+				}
 				if (model) {
 					if (model.provider && footerData.getAvailableProviderCount() > 1) {
 						rightPartsLine2.push(theme.fg("muted", `(${model.provider})`));

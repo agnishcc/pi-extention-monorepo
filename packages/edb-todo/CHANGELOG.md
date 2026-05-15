@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Added `promptSnippet` to all six tools (`TaskCreate`, `TaskList`, `TaskGet`, `TaskUpdate`, `TaskOutput`, `TaskStop`) so they appear in the system prompt's Available tools section
+
 ## [0.10.4] - 2026-05-15
 
 ## [0.10.3] - 2026-05-15

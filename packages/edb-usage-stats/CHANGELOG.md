@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+- Replaced fixed-width 55-char box layout with `DynamicBorder` (full terminal width, adapts automatically)
+- Provider name now uses accent color; label line colored by severity (dim when safe, colored when ≤ 30% remaining)
+- Progress bar width now scales with terminal width (18–42 chars) instead of fixed 12 chars
+- Bar + usage string on separate lines (label line then bar + `% left`), matching pi-quotas style
+- Reset time moved to its own subtitle line (`Resets in …`)
+- Loading state now uses animated `Loader` spinner instead of static text
+- Removed `waitForIdle()` from command handler — overlay opens immediately even while agent is running
+
 ## [0.10.4] - 2026-05-15
 
 ## [0.10.3] - 2026-05-15

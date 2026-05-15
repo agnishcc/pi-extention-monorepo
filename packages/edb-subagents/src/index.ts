@@ -812,6 +812,7 @@ Guidelines:
 				),
 				...scheduleParam,
 			}),
+			promptSnippet: "Launch a specialized subagent to autonomously handle a complex multi-step task",
 
 			// ---- Custom rendering: Claude Code style ----
 
@@ -1250,6 +1251,7 @@ Guidelines:
 					}),
 				),
 			}),
+			promptSnippet: "Check status and retrieve results from a background subagent by its ID",
 			execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
 				const record = manager.getRecord(params.agent_id);
 				if (!record) {
@@ -1326,6 +1328,7 @@ Guidelines:
 						"The steering message to send. This will appear as a user message in the agent's conversation.",
 				}),
 			}),
+			promptSnippet: "Send a mid-run steering message to redirect a running background subagent",
 			execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
 				const record = manager.getRecord(params.agent_id);
 				if (!record) {

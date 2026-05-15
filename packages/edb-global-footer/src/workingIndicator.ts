@@ -506,9 +506,14 @@ function applyShimmer(text: string, frame: number, baseHex: string, shimmerHex: 
 	return result;
 }
 
+export interface WorkingIndicatorRef {
+	currentLine: string | undefined;
+}
+
 // ── Working Indicator ─────────────────────────────────────────────────────────
 
-export function installWorkingIndicator(pi: ExtensionAPI): void {
+export function installWorkingIndicator(pi: ExtensionAPI): WorkingIndicatorRef {
+	const ref: WorkingIndicatorRef = { currentLine: undefined };
 	let ctx: ExtensionContext | null = null;
 	let isActive = false;
 
@@ -519,7 +524,6 @@ export function installWorkingIndicator(pi: ExtensionAPI): void {
 	let completionTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// State
-	let spinnerFrame = 0;
 	let shimmerFrame = 0;
 	let currentVerb = "Working";
 	let startedAt = 0;
@@ -552,9 +556,6 @@ export function installWorkingIndicator(pi: ExtensionAPI): void {
 		const theme = ctx.ui.theme;
 		const sep = theme.fg("dim", " · ");
 
-		// Spinner frame (accent colored)
-		const frame = theme.fg("accent", SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]!);
-
 		// Verb with shimmer
 		const verbText = `${currentVerb}...`;
 		let verbStyled: string;
@@ -567,20 +568,21 @@ export function installWorkingIndicator(pi: ExtensionAPI): void {
 		// Timer
 		const timer = theme.fg("dim", formatElapsed(elapsedMs));
 
-		// Assemble parts
-		const parts: string[] = [frame, verbStyled];
-		if (toolSuffix) parts.push(toolSuffix);
+		// Assemble parts — do NOT include frame here; the Loader prepends its own spinner via setWorkingIndicator
+		const parts: string[] = [verbStyled];
+		if (toolSuffix) parts.push(theme.fg("dim", toolSuffix));
 		parts.push(timer);
 
-		ctx.ui.setWorkingMessage(parts.join(sep));
+		const rendered = parts.join(sep);
+		ref.currentLine = rendered;
+		ctx.ui.setWorkingMessage(rendered);
 	}
 
 	// ── Timer management ──────────────────────────────────────────────────────
 
 	function startTimers(): void {
-		// Spinner + shimmer: 150ms
+		// Shimmer: 150ms
 		spinnerTimer = setInterval(() => {
-			spinnerFrame++;
 			shimmerFrame++;
 			render();
 		}, SPINNER_INTERVAL_MS);
@@ -621,6 +623,7 @@ export function installWorkingIndicator(pi: ExtensionAPI): void {
 		if (completionTimer) {
 			clearTimeout(completionTimer);
 			completionTimer = null;
+			ctx?.ui.setWidget("wi-completion", undefined);
 		}
 	}
 
@@ -635,14 +638,16 @@ export function installWorkingIndicator(pi: ExtensionAPI): void {
 		const verb = theme.fg("accent", randomItem(COMPLETION_VERBS));
 		const time = theme.fg("dim", formatElapsed(totalMs));
 		const sep = theme.fg("dim", " · ");
+		const completionLine = `${check}${sep}${verb}${sep}${time}`;
 
-		ctx.ui.setWorkingMessage(`${check}${sep}${verb}${sep}${time}`);
-		ctx.ui.setStatus("working-indicator", `${check} ${verb}`);
+		// The Loader is torn down by pi on agent_end, so setWorkingMessage is a no-op.
+		// Use setWidget to briefly show the completion state above the editor.
+		ctx.ui.setWidget("wi-completion", [completionLine]);
 
 		completionTimer = setTimeout(() => {
 			completionTimer = null;
-			ctx?.ui.setWorkingMessage(undefined);
-			ctx?.ui.setStatus("working-indicator", "");
+			ref.currentLine = undefined;
+			ctx?.ui.setWidget("wi-completion", undefined);
 		}, 3000);
 	}
 
@@ -670,7 +675,6 @@ export function installWorkingIndicator(pi: ExtensionAPI): void {
 		isActive = true;
 		startedAt = Date.now();
 		elapsedMs = 0;
-		spinnerFrame = 0;
 		shimmerFrame = 0;
 		toolSuffix = undefined;
 		activeTools.clear();
@@ -742,6 +746,9 @@ export function installWorkingIndicator(pi: ExtensionAPI): void {
 		stopTimers();
 		cancelCompletionTimer();
 		isActive = false;
+		ref.currentLine = undefined;
 		ctx = null;
 	});
+
+	return ref;
 }

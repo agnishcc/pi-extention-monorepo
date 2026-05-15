@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+- Working indicator no longer includes its own spinner frame in the message — removed double-spinner (the Loader renders the spinner via `setWorkingIndicator`)
+- Completion message now uses `setWidget` instead of `setWorkingMessage` so it remains visible after `agent_end` tears down the Loader
+- `cancelCompletionTimer` now clears the completion widget immediately when a new agent run starts
+- TPS calculator now excludes tool execution time — clock pauses on `tool_execution_start` and resumes on next `message_update`, so TPS reflects actual streaming speed only
+- TPS indicator moved to the right side of footer line 2, before the provider/model block
+- TPS color is now three-state: red (< 30 t/s), yellow (< 50 t/s), green (≥ 50 t/s); lightning icon remains white
+- Usage overlay now uses `DynamicBorder` (full-width, adapts to terminal) replacing the fixed-width 55-char box (imported from `edb-usage-stats`)
+- `waitForIdle()` removed from `/usage` command handler — overlay now opens immediately even while the agent is running
+
 ## [0.10.4] - 2026-05-15
 
 ## [0.10.3] - 2026-05-15

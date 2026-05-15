@@ -275,6 +275,7 @@ Returns a summary of each task:
 - **blockedBy**: Open task IDs that must be resolved first
 
 Use TaskGet with a specific task ID to view full details including description.`,
+		promptSnippet: "List all tasks in the task list with status, priority, and dependency info",
 		parameters: Type.Object({}),
 
 		async execute() {
@@ -343,6 +344,7 @@ Returns full task details:
 
 - After fetching a task, verify its blockedBy list is empty before beginning work.
 - Use TaskList to see all tasks in summary form.`,
+		promptSnippet: "Retrieve full details of a task by ID, including description and dependencies",
 		parameters: TodoGetParams,
 
 		async execute(_id, params) {
@@ -451,6 +453,7 @@ Delete a task:
 
 Set dependencies:
 \`{ "id": "t2", "addBlockedBy": ["t1"] }\``,
+		promptSnippet: "Update a task's status, content, priority, or dependency links",
 		promptGuidelines: [
 			"Mark tasks in_progress BEFORE starting work, completed immediately after finishing. Never batch completions.",
 			"ONLY mark completed when fully done — not when tests are failing or implementation is partial.",
@@ -521,6 +524,7 @@ Set dependencies:
 			"- Use block=true (default) to wait for task completion\n" +
 			"- Use block=false for a non-blocking check of current status\n" +
 			"- Task IDs can be found using TaskList",
+		promptSnippet: "Retrieve output from a running or completed background task process",
 		parameters: Type.Object({
 			task_id: Type.String({ description: "The task ID to get output from" }),
 			block: Type.Optional(Type.Boolean({ description: "Whether to wait for completion (default: true)" })),
@@ -595,6 +599,7 @@ Set dependencies:
 			"- Sends SIGTERM, waits 5 seconds, then SIGKILL if still running\n" +
 			"- Marks the task as completed after stopping\n" +
 			"- Use this tool when you need to terminate a long-running task",
+		promptSnippet: "Stop a running background task process",
 		parameters: Type.Object({
 			task_id: Type.String({ description: "The task ID of the background process to stop" }),
 		}),
