@@ -35,24 +35,26 @@ const TOOL_EXECUTION_PATCH_SYMBOL = Symbol.for("edb-compact-tools.tool-execution
 const USER_MESSAGE_PATCH_SYMBOL = Symbol.for("edb-compact-tools.user-message-patch");
 const ASSISTANT_MESSAGE_PATCH_SYMBOL = Symbol.for("edb-compact-tools.assistant-message-patch");
 const USER_MESSAGE_MARKER_SYMBOL = Symbol.for("edb-compact-tools.user-message-marker");
+const ASSISTANT_MESSAGE_MARKER_SYMBOL = Symbol.for("edb-compact-tools.assistant-message-marker");
 const USER_MESSAGE_EMOJIS = [
-	"✨",
-	"🚀",
-	"🧠",
-	"⚡",
-	"🔥",
-	"🌿",
-	"🌀",
-	"💎",
-	"🛠️",
-	"🎯",
 	"🦊",
 	"🐙",
-	"🌙",
-	"☕",
-	"🍀",
-	"🪄",
+	"🐸",
+	"🐻",
+	"🐼",
+	"🐨",
+	"🦥",
+	"🦔",
+	"🦫",
+	"🦚",
+	"🦩",
+	"🦉",
+	"🐰",
+	"🐢",
+	"🦎",
+	"🦖",
 ];
+const ASSISTANT_MESSAGE_EMOJIS = ["🤖", "🧠", "🦾", "🛸", "💡"];
 let activeTheme: CompactTheme | undefined;
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
@@ -367,8 +369,13 @@ function frameUserMessage(lines: string[], width: number, theme: CompactTheme, m
 	return frameMessage(lines, width, theme, markerText, "accent", "error");
 }
 
-function frameAssistantMessage(lines: string[], width: number, theme: CompactTheme): string[] {
-	return frameMessage(lines, width, theme, "AI", "borderMuted", "toolTitle");
+function randomAssistantMessageMarker(): string {
+	return ASSISTANT_MESSAGE_EMOJIS[Math.floor(Math.random() * ASSISTANT_MESSAGE_EMOJIS.length)] ?? "🤖";
+}
+
+function _frameAssistantMessage(lines: string[], width: number, theme: CompactTheme): string[] {
+	const marker = randomAssistantMessageMarker();
+	return frameMessage(lines, width, theme, marker, "border", "toolTitle");
 }
 
 function installGenericToolRendererPatch(pi: ExtensionAPI): void {
@@ -446,7 +453,16 @@ function installMessageRenderers(pi: ExtensionAPI): void {
 			const rendered = originalRender.call(this, Math.max(1, width - 3));
 			if (this?.hasToolCalls || rendered.length === 0) return rendered;
 			const frameWidth = Math.max(1, width - 1);
-			return frameAssistantMessage(rendered, frameWidth, activeTheme ?? fallbackTheme());
+			if (!this[ASSISTANT_MESSAGE_MARKER_SYMBOL])
+				this[ASSISTANT_MESSAGE_MARKER_SYMBOL] = randomAssistantMessageMarker();
+			return frameMessage(
+				rendered,
+				frameWidth,
+				activeTheme ?? fallbackTheme(),
+				this[ASSISTANT_MESSAGE_MARKER_SYMBOL],
+				"border",
+				"toolTitle",
+			);
 		};
 		assistantProto[ASSISTANT_MESSAGE_PATCH_SYMBOL] = { originalRender };
 	}
