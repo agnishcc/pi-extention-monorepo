@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.3] - 2026-05-15
 
 ### Changed
 - Improved session title generation prompt to prioritize searchable, specific names and use memorable funny coding-themed fallbacks for vague first messages.
