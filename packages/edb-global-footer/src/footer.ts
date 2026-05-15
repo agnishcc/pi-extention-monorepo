@@ -155,7 +155,7 @@ export function createFooterRenderer(
 				const rightPartsLine2: string[] = [];
 				if (showTps) {
 					const tpsColor = tps < 30 ? "error" : tps < 50 ? "warning" : "success";
-					rightPartsLine2.push(`${theme.fg("fg", "⚡")}${theme.fg(tpsColor, formatTps(tps))}`);
+					rightPartsLine2.push(`⚡${theme.fg(tpsColor, formatTps(tps))}`);
 				}
 				if (model) {
 					if (model.provider && footerData.getAvailableProviderCount() > 1) {
