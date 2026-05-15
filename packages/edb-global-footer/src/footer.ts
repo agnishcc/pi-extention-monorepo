@@ -179,18 +179,19 @@ export function createFooterRenderer(
 				// Filter out blacklisted status keys
 				const visibleStatuses = new Map<string, string>(
 					Array.from(extensionStatuses.entries() as [string, string][]).filter(
-						([key]) => !STATUS_KEY_BLACKLIST.has(key),
+						([key, value]) => !STATUS_KEY_BLACKLIST.has(key) && value.trim() !== "",
 					),
 				);
 				if (visibleStatuses.size > 0) {
 					const statusLine = Array.from(visibleStatuses.values())
 						.map((text) => sanitizeStatusText(text))
+						.filter((text) => text !== "")
 						.sort((a, b) => a.localeCompare(b))
 						.join(" ");
-					lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));
+					if (statusLine) lines.push(truncateToWidth(statusLine, width, theme.fg("dim", "...")));
 				}
 
-				return lines.map((line) => truncateToWidth(line, width));
+				return lines.filter((line) => line !== "").map((line) => truncateToWidth(line, width));
 			},
 		};
 	};
