@@ -10,7 +10,6 @@ import type { FileEntry, GitDiffSnapshot } from "./types";
 import { ChangeType } from "./types";
 
 const WIDGET_KEY = "pi-diff-files";
-const STATUS_KEY = "pi-diff-files";
 
 // Filter modes cycle: all → created → edited → deleted → all
 type FilterMode = "all" | "created" | "edited" | "deleted";
@@ -352,22 +351,7 @@ export default function diffFilesExtension(pi: any): void {
 			ctx.ui.setWidget(WIDGET_KEY, undefined);
 		}
 
-		// ── Footer status ──────────────────────────────────────────────────
-		const entries = tracker.getEntries();
-		const uiTheme = ctx.ui?.theme;
-		if (entries.length === 0 || !uiTheme?.fg) {
-			ctx.ui.setStatus(STATUS_KEY, undefined);
-		} else {
-			const created = entries.filter((e: FileEntry) => e.changeType === ChangeType.Created).length;
-			const edited = entries.filter((e: FileEntry) => e.changeType === ChangeType.Edited).length;
-			const deleted = entries.filter((e: FileEntry) => e.changeType === ChangeType.Deleted).length;
-			const inner: string[] = [];
-			if (created > 0) inner.push(uiTheme.fg("toolDiffAdded", `+${created}`));
-			if (edited > 0) inner.push(uiTheme.fg("warning", `~${edited}`));
-			if (deleted > 0) inner.push(uiTheme.fg("toolDiffRemoved", `-${deleted}`));
-			const status = uiTheme.fg("muted", "D(") + inner.join(uiTheme.fg("dim", "  ")) + uiTheme.fg("muted", ")");
-			ctx.ui.setStatus(STATUS_KEY, status);
-		}
+		// ── Footer status (removed — widget already shows diff summary) ─────
 	}
 
 	// ── write/edit tool_call ──────────────────────────────────────────────
@@ -485,7 +469,6 @@ export default function diffFilesExtension(pi: any): void {
 		tracker.clear();
 		bashSnapshots.clear();
 		ctx.ui.setWidget(WIDGET_KEY, undefined);
-		ctx.ui.setStatus(STATUS_KEY, undefined);
 	});
 
 	// ── /diff-files command ─────────────────────────────────────────────────
