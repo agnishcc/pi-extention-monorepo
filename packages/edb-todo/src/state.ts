@@ -140,7 +140,6 @@ export class TodoWidget {
 		if (tasks.length === 0) {
 			if (this.widgetRegistered) {
 				this.uiCtx.setWidget("pi-todo", undefined);
-				this.uiCtx.setStatus("pi-todo", undefined);
 				this.widgetRegistered = false;
 			}
 			if (this.widgetInterval) {
@@ -182,16 +181,6 @@ export class TodoWidget {
 				{ placement: "aboveEditor" },
 			);
 			this.widgetRegistered = true;
-
-			// Also set status bar
-			const active = tasks.filter((t) => t.status !== "completed");
-			const inProg = active.filter((t) => t.status === "in_progress");
-			const doneCount = tasks.filter((t) => t.status === "completed").length;
-			const th = this.uiCtx.theme;
-			const parts: string[] = [];
-			if (inProg.length > 0) parts.push(th.fg("accent", `● ${inProg.length} active`));
-			if (doneCount > 0) parts.push(th.fg("success", `✓ ${doneCount} done`));
-			this.uiCtx.setStatus("pi-todo", parts.join("  "));
 		} else if (this.tui) {
 			this.tui.requestRender();
 		}
@@ -204,7 +193,6 @@ export class TodoWidget {
 		}
 		if (this.uiCtx) {
 			this.uiCtx.setWidget("pi-todo", undefined);
-			this.uiCtx.setStatus("pi-todo", undefined);
 		}
 		this.widgetRegistered = false;
 		this.tui = undefined;

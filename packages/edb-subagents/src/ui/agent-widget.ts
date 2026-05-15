@@ -215,8 +215,6 @@ export class AgentWidget {
 	private widgetRegistered = false;
 	/** Cached TUI reference from widget factory callback, used for requestRender(). */
 	private tui: any | undefined;
-	/** Last status bar text, used to avoid redundant setStatus calls. */
-	private lastStatusText: string | undefined;
 
 	constructor(
 		private manager: AgentManager,
@@ -231,7 +229,6 @@ export class AgentWidget {
 			this.uiCtx = ctx;
 			this.widgetRegistered = false;
 			this.tui = undefined;
-			this.lastStatusText = undefined;
 		}
 	}
 
@@ -491,10 +488,6 @@ export class AgentWidget {
 				this.widgetRegistered = false;
 				this.tui = undefined;
 			}
-			if (this.lastStatusText !== undefined) {
-				this.uiCtx.setStatus("subagents", undefined);
-				this.lastStatusText = undefined;
-			}
 			if (this.widgetInterval) {
 				clearInterval(this.widgetInterval);
 				this.widgetInterval = undefined;
@@ -506,20 +499,7 @@ export class AgentWidget {
 			return;
 		}
 
-		// Status bar — only call setStatus when the text actually changes
-		let newStatusText: string | undefined;
-		if (hasActive) {
-			const statusParts: string[] = [];
-			if (runningCount > 0) statusParts.push(`${runningCount} running`);
-			if (queuedCount > 0) statusParts.push(`${queuedCount} queued`);
-			const total = runningCount + queuedCount;
-			newStatusText = `${statusParts.join(", ")} agent${total === 1 ? "" : "s"}`;
-		}
-		if (newStatusText !== this.lastStatusText) {
-			this.uiCtx.setStatus("subagents", newStatusText);
-			this.lastStatusText = newStatusText;
-		}
-
+		// (status bar removed — widget shows agent info)
 		this.widgetFrame++;
 
 		// Register widget callback once; subsequent updates use requestRender()
@@ -554,10 +534,8 @@ export class AgentWidget {
 		}
 		if (this.uiCtx) {
 			this.uiCtx.setWidget("agents", undefined);
-			this.uiCtx.setStatus("subagents", undefined);
 		}
 		this.widgetRegistered = false;
 		this.tui = undefined;
-		this.lastStatusText = undefined;
 	}
 }
