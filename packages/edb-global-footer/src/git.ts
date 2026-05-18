@@ -13,7 +13,7 @@ export function parseGitStatus(output: string): GitStatus {
 		if (!line) continue;
 		if (line.startsWith("# branch.head ")) {
 			const head = line.slice("# branch.head ".length).trim();
-			branch = head && head !== "(detached)" ? head : null;
+			branch = head && !head.startsWith("(detached") ? head : null;
 			continue;
 		}
 		if (line.startsWith("# branch.ab ")) {
