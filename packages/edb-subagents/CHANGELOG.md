@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.10.8] - 2026-05-18
 
 ### Changed
 - Replaced Braille spinner (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, 10 frames @ 80ms) with Claude Code–style spinner (· ✢ ✳ ✶ ✻ ✽, 6 frames @ 150ms) to match the global footer's working indicator

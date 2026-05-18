@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-usage-stats",
-	"version": "0.10.7",
+	"version": "0.10.8",
 	"description": "Pi extension: /usage command showing token rates, reset timers, and live provider status",
 	"keywords": [
 		"pi-package",
