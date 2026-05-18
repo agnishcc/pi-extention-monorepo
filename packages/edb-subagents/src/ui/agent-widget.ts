@@ -16,8 +16,8 @@ import { getLifetimeTotal, getSessionContextPercent, type LifetimeUsage, type Se
 /** Maximum number of rendered lines before overflow collapse kicks in. */
 const MAX_WIDGET_LINES = 12;
 
-/** Braille spinner frames for animated running indicator. */
-export const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/** Claude Code–style spinner frames for animated running indicator. */
+export const SPINNER = ["·", "✢", "✳", "✶", "✻", "✽"];
 
 /** Statuses that indicate an error/non-success outcome (used for linger behavior and icon rendering). */
 export const ERROR_STATUSES = new Set(["error", "aborted", "steered", "stopped"]);
@@ -248,7 +248,7 @@ export class AgentWidget {
 	/** Ensure the widget update timer is running. */
 	ensureTimer() {
 		if (!this.widgetInterval) {
-			this.widgetInterval = setInterval(() => this.update(), 80);
+			this.widgetInterval = setInterval(() => this.update(), 150);
 		}
 	}
 

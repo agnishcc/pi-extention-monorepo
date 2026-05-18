@@ -1168,11 +1168,11 @@ Guidelines:
 					}
 				};
 
-				// Animate spinner at ~80ms (smooth rotation through 10 braille frames)
+				// Animate spinner at 150ms (Claude Code–style 6-frame rotation)
 				const spinnerInterval = setInterval(() => {
 					spinnerFrame++;
 					streamUpdate();
-				}, 80);
+				}, 150);
 
 				streamUpdate();
 
