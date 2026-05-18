@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-agent-steer",
-	"version": "0.10.8",
+	"version": "0.10.9",
 	"description": "Pi extension: intercepts mid-turn messages with a steer / queue / discard / edit prompt",
 	"keywords": [
 		"pi-package",

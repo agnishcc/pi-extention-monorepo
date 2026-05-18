@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-compact-tools",
-	"version": "0.10.8",
+	"version": "0.10.9",
 	"description": "Pi extension: compact outlined tool-call renderers with ctrl+o expansion",
 	"keywords": [
 		"pi-package",
