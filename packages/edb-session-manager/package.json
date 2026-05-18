@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-session-manager",
-	"version": "0.10.6",
+	"version": "0.10.7",
 	"description": "Pi extension: browse, resume, rename, and delete sessions with fuzzy search",
 	"keywords": [
 		"pi-package",
