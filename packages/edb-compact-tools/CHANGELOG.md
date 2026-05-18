@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-18
+
+### Changed
+- **Breaking:** Modularized codebase into 9 focused modules for better maintainability
+  - `types.ts` — shared TypeScript types (`CompactTheme`, `BuiltinToolName`, `BuiltinTool`, `ToolBlockKind`)
+  - `constants.ts` — rendering limits, patch symbols, emoji sets, OSC133 markers, ANSI codes
+  - `text.ts` — text utility functions (`oneLine`, `clip`, `lineCount`, `textContent`, etc.)
+  - `tool-meta.ts` — tool metadata registry with per-tool colors, icons, labels, and summaries
+  - `tool-block.ts` — `EmptyBlock` and `ToolBlock` classes (box-drawing renderer)
+  - `tool-renderer.ts` — `renderCall` and `renderResult` functions
+  - `message-frame.ts` — message framing functions for user/assistant messages
+  - `patches.ts` — tool and message renderer installation
+  - `index.ts` — thin entry point
+
+### Added
+- Purple outline color for `read` tool when reading skill files (`.agents/skills/` or `.pi/agent/skills/`)
+- `tool-meta.ts` uses a declarative registry object pattern for tool metadata
+- `frameAssistantMessage` export (renamed from `_frameAssistantMessage`)
+
 ## [0.10.6] - 2026-05-15
 
 ## [0.10.5] - 2026-05-15

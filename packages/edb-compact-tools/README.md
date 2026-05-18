@@ -16,12 +16,13 @@ Pi extension that replaces large built-in tool-call blocks with compact outlined
 - Styles assistant text messages as compact outlined cards with muted borders.
 - Uses an outline color per tool:
   - `bash` -> `bashMode`
-  - `read` -> `toolTitle`
+  - `read` -> `toolTitle` (or purple when reading skill files)
   - `grep` -> `success`
   - `find` -> `accent`
   - `ls` -> `warning`
   - `edit` -> `toolDiffAdded`
   - `write` -> `accent`
+- Detects skill files (paths containing `.agents/skills/` or `.pi/agent/skills/`) and renders them with a purple outline
 
 ## Local development
 
