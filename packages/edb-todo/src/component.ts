@@ -191,6 +191,7 @@ export class TodoViewComponent {
 		}
 
 		const idHint = th.fg("dim", ` [${task.id}]`);
+		const ownerHint = task.owner ? th.fg("dim", ` [${task.owner}]`) : "";
 		const cursor = isFocused ? th.fg("accent", "❯") : " ";
 
 		// Dependency hint
@@ -208,7 +209,7 @@ export class TodoViewComponent {
 			depHint += th.fg("dim", ` → blocks ${task.blocks.map((id) => `#${id}`).join(", ")}`);
 		}
 
-		return [truncateToWidth(`  ${cursor} ${icon} ${pLabel}  ${contentText}${idHint}${depHint}`, width)];
+		return [truncateToWidth(`  ${cursor} ${icon} ${pLabel}  ${contentText}${idHint}${ownerHint}${depHint}`, width)];
 	}
 
 	private rebuildFlatTasks(): void {

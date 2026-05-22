@@ -26,3 +26,6 @@ thoughts/
 .npm/
 coverage/
 .nyc_output/
+
+# Local docs
+ai_docs/

@@ -5,12 +5,13 @@
  *   Agent             — LLM-callable: spawn a sub-agent
  *   get_subagent_result  — LLM-callable: check background agent status/result
  *   steer_subagent       — LLM-callable: send a steering message to a running agent
+ *   send_to_agent        — LLM-callable: send a follow-up to a completed agent (context preserved)
  *
  * Commands:
  *   /agents                 — Interactive agent management menu
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
 	defineTool,
@@ -518,6 +519,63 @@ export default function (pi: ExtensionAPI) {
 	// --- Cross-extension RPC via pi.events ---
 	let currentCtx: ExtensionContext | undefined;
 
+	// edb-bridge + edb-todo integration: track current session's bridge ID and todo store path
+	let bridgeSessionId: string | undefined;
+	let todoStorePath: string | undefined;
+
+	// Promise that resolves when bridge:ready fires (or immediately if already ready).
+	// Used to avoid a race where a sub-agent is spawned before the bridge connects.
+	let bridgeReadyResolve: (() => void) | undefined;
+	const bridgeReadyPromise = new Promise<void>((resolve) => {
+		bridgeReadyResolve = resolve;
+	});
+
+	pi.events.on("bridge:ready", (payload: unknown) => {
+		const p = payload as { sessionId?: string } | undefined;
+		if (p?.sessionId) {
+			bridgeSessionId = p.sessionId;
+			bridgeReadyResolve?.();
+		}
+	});
+
+	pi.events.on("todo:store_path", (payload: unknown) => {
+		const p = payload as { path?: string } | undefined;
+		if (p?.path) todoStorePath = p.path;
+	});
+
+	/**
+	 * Read a task from the shared task store (synchronous, best-effort).
+	 * Returns undefined if the store is not available or the task doesn't exist.
+	 */
+	function readTaskFromStore(
+		taskId: string,
+	): { parentId?: string; status?: string; blockQuestion?: string; blockMessageId?: string } | undefined {
+		if (!todoStorePath) return undefined;
+		try {
+			const raw = readFileSync(todoStorePath, "utf-8");
+			const data = JSON.parse(raw) as {
+				tasks?: Array<{
+					id: string;
+					parentId?: string;
+					status?: string;
+					blockQuestion?: string;
+					blockMessageId?: string;
+				}>;
+			};
+			return data.tasks?.find((t) => t.id === taskId);
+		} catch {
+			return undefined;
+		}
+	}
+
+	/**
+	 * Update a task via pi.events — edb-todo handles the write.
+	 * Fires "todo:update_task" which edb-todo listens for and applies synchronously.
+	 */
+	function updateTask(taskId: string, fields: { status?: string; owner?: string }): void {
+		pi.events.emit("todo:update_task", { taskId, fields });
+	}
+
 	// ---- Subagent scheduler ----
 	// Session-scoped: store is constructed inside session_start once sessionId
 	// is available. Mirrors pi-chonky-tasks's session-scoped task store —
@@ -660,21 +718,21 @@ export default function (pi: ExtensionAPI) {
 		const defaultNames = getDefaultAgentNames().filter((n) => getAgentConfig(n)?.enabled !== false);
 		const userNames = getUserAgentNames().filter((n) => getAgentConfig(n)?.enabled !== false);
 
-		const defaultDescs = defaultNames.map((name) => {
+		const formatAgent = (name: string, isDefault: boolean) => {
 			const cfg = getAgentConfig(name);
-			const modelSuffix = cfg?.model ? ` (${getModelLabelFromConfig(cfg.model)})` : "";
-			return `- ${name}: ${cfg?.description ?? name}${modelSuffix}`;
-		});
-
-		const customDescs = userNames.map((name) => {
-			const cfg = getAgentConfig(name);
-			return `- ${name}: ${cfg?.description ?? name}`;
-		});
+			const modelSuffix = isDefault && cfg?.model ? ` (${getModelLabelFromConfig(cfg.model)})` : "";
+			const desc = `- ${name}: ${cfg?.description ?? name}${modelSuffix}`;
+			// Include context block if defined — tells the orchestrator when/why to use this agent
+			if (cfg?.context) {
+				return `${desc}\n  When to use: ${cfg.context.trim()}`;
+			}
+			return desc;
+		};
 
 		return [
 			"Default agents:",
-			...defaultDescs,
-			...(customDescs.length > 0 ? ["", "Custom agents:", ...customDescs] : []),
+			...defaultNames.map((n) => formatAgent(n, true)),
+			...(userNames.length > 0 ? ["", "Custom agents:", ...userNames.map((n) => formatAgent(n, false))] : []),
 			"",
 			`Custom agents can be defined in .pi/agents/<name>.md (project) or ${getAgentDir()}/agents/<name>.md (global) — they are picked up automatically. Project-level agents override global ones. Creating a .md file with the same name as a default agent overrides it.`,
 		].join("\n");
@@ -746,6 +804,7 @@ Guidelines:
 - Use run_in_background for work you don't need immediately. You will be notified when it completes.
 - Use resume with an agent ID to continue a previous agent's work.
 - Use steer_subagent to send mid-run messages to a running background agent.
+- Use send_to_agent to follow up with a completed agent (preserves full conversation context).
 - Use model to specify a different model (as "provider/modelId", or fuzzy e.g. "haiku", "sonnet").
 - Use thinking to control extended thinking level.
 - Use inherit_context if the agent needs the parent conversation history.
@@ -808,6 +867,23 @@ Guidelines:
 					Type.Literal("worktree", {
 						description:
 							'Set to "worktree" to run the agent in a temporary git worktree (isolated copy of the repo). Changes are saved to a branch on completion.',
+					}),
+				),
+				task_id: Type.Optional(
+					Type.String({
+						description:
+							"Optional task ID from the shared task store to associate with this agent. " +
+							"When set: the agent auto-updates its task status (in_progress on start, completed/failed on finish), " +
+							"the agent's system prompt is given task lifecycle instructions, " +
+							"and subtask creation follows the two-layer rule (top-level tasks can create subtasks; subtasks cannot).",
+					}),
+				),
+				agent_name: Type.Optional(
+					Type.String({
+						description:
+							"A short, memorable name for this agent (e.g. 'Quinn', 'Atlas', 'Hex'). " +
+							"Shown in the task widget as [name] when the agent owns a task. " +
+							"Separate from description (which is the task summary). Keep it 1-2 words, evocative of the role.",
 					}),
 				),
 				...scheduleParam,
@@ -911,8 +987,18 @@ Guidelines:
 			// ---- Execute ----
 
 			execute: async (toolCallId, params, signal, onUpdate, ctx) => {
+				// Extract extended params — task_id and agent_name are optional Agent tool params
+				// not reflected in the TypeBox static type, accessed via explicit cast here.
+				const taskId = (params as any).task_id as string | undefined;
+				const agentName = (params as any).agent_name as string | undefined;
+
 				// Ensure we have UI context for widget rendering
 				widget.setUICtx(ctx.ui as UICtx);
+
+				// Wait for bridge:ready (up to 3s) to avoid race where bridge hasn't connected yet
+				if (!bridgeSessionId) {
+					await Promise.race([bridgeReadyPromise, new Promise<void>((res) => setTimeout(res, 3000))]);
+				}
 
 				// Reload custom agents so new .pi/agents/*.md files are picked up without restart
 				reloadCustomAgents();
@@ -1065,6 +1151,7 @@ Guidelines:
 					try {
 						id = manager.spawn(pi, ctx, subagentType, params.prompt, {
 							description: params.description,
+							agentName: agentName,
 							model,
 							fallbackModels: params.fallback_models as string[] | undefined,
 							maxTurns: effectiveMaxTurns,
@@ -1074,6 +1161,33 @@ Guidelines:
 							isBackground: true,
 							isolation,
 							invocation: agentInvocation,
+							// edb-bridge + edb-todo: inject orchestrator context into sub-agent
+							...(bridgeSessionId
+								? {
+										bridgeContext: {
+											parentSessionId: bridgeSessionId,
+											agentId: String(agentName ?? params.description ?? subagentType),
+											storePath: todoStorePath,
+											taskId: taskId,
+											agentIsSubtask: taskId ? !!readTaskFromStore(taskId!)?.parentId : undefined,
+										},
+									}
+								: {}),
+							// Auto task lifecycle
+							...(taskId
+								? {
+										onTaskLifecycle: (event: "start" | "complete" | "failed") => {
+											const agentId = String(agentName ?? params.description ?? subagentType);
+											if (event === "start") {
+												updateTask(taskId, { status: "in_progress", owner: agentId });
+											} else if (event === "complete") {
+												updateTask(taskId, { status: "completed", owner: agentId });
+											} else {
+												updateTask(taskId, { status: "failed", owner: agentId });
+											}
+										},
+									}
+								: {}),
 							...bgCallbacks,
 						});
 					} catch (err) {
@@ -1122,6 +1236,9 @@ Guidelines:
 							`Description: ${params.description}\n` +
 							(record?.outputFile ? `Output file: ${record.outputFile}\n` : "") +
 							(isQueued ? `Position: queued (max ${manager.getMaxConcurrent()} concurrent)\n` : "") +
+							(!bridgeSessionId
+								? `\nNote: edb-bridge not connected — ask_supervisor and notify_parent will not work.\n`
+								: "") +
 							`\nYou will be notified when this agent completes.\n` +
 							`Use get_subagent_result to retrieve full results, or steer_subagent to send it messages.\n` +
 							`Do not duplicate this agent's work.`,
@@ -1180,6 +1297,7 @@ Guidelines:
 				try {
 					record = await manager.spawnAndWait(pi, ctx, subagentType, params.prompt, {
 						description: params.description,
+						agentName: agentName,
 						model,
 						fallbackModels: params.fallback_models as string[] | undefined,
 						maxTurns: effectiveMaxTurns,
@@ -1189,6 +1307,33 @@ Guidelines:
 						isolation,
 						invocation: agentInvocation,
 						signal,
+						// edb-bridge + edb-todo: inject orchestrator context into sub-agent
+						...(bridgeSessionId
+							? {
+									bridgeContext: {
+										parentSessionId: bridgeSessionId,
+										agentId: String(agentName ?? params.description ?? "agent"),
+										storePath: todoStorePath,
+										taskId: taskId,
+										agentIsSubtask: taskId ? !!readTaskFromStore(taskId!)?.parentId : undefined,
+									},
+								}
+							: {}),
+						// Auto task lifecycle
+						...(taskId
+							? {
+									onTaskLifecycle: (event: "start" | "complete" | "failed") => {
+										const agentId = String(agentName ?? params.description ?? "agent");
+										if (event === "start") {
+											updateTask(taskId, { status: "in_progress", owner: agentId });
+										} else if (event === "complete") {
+											updateTask(taskId, { status: "completed", owner: agentId });
+										} else {
+											updateTask(taskId, { status: "failed", owner: agentId });
+										}
+									},
+								}
+							: {}),
 						...fgCallbacks,
 					});
 				} catch (err) {
@@ -1234,7 +1379,8 @@ Guidelines:
 			name: "get_subagent_result",
 			label: "Get Agent Result",
 			description:
-				"Check status and retrieve results from a background agent. Use the agent ID returned by Agent with run_in_background.",
+				"Check status and retrieve results from a background agent. Use the agent ID returned by Agent with run_in_background.\n\n" +
+				"If the agent has called ask_supervisor and is waiting for your answer, wait: true will detect this and return the question and message_id immediately instead of blocking.",
 			parameters: Type.Object({
 				agent_id: Type.String({
 					description: "The agent ID to check.",
@@ -1259,6 +1405,26 @@ Guidelines:
 				}
 
 				// Wait for completion if requested.
+				// Check if the agent's linked task is blocked (waiting for answer_subagent).
+				// If so, waiting would cause a deadlock — return immediately with the question.
+				if (params.wait && record.status === "running" && record.taskId && todoStorePath) {
+					try {
+						const task = readTaskFromStore(record.taskId);
+						if (task && (task as any).status === "blocked" && (task as any).blockQuestion) {
+							const q = (task as any).blockQuestion as string;
+							const msgId = (task as any).blockMessageId as string | undefined;
+							return textResult(
+								`Agent is blocked waiting for your answer.\n\n` +
+									`Question: "${q}"\n\n` +
+									(msgId ? `Call: answer_subagent({ message_id: "${msgId}", answer: "..." })\n\n` : "") +
+									`After answering, call get_subagent_result again to wait for completion.`,
+							);
+						}
+					} catch {
+						/* ignore — best-effort check */
+					}
+				}
+
 				// Pre-mark resultConsumed BEFORE awaiting: onComplete fires inside .then()
 				// (attached earlier at spawn time) and always runs before this await resumes.
 				// Setting the flag here prevents a redundant follow-up notification.
@@ -1367,6 +1533,72 @@ Guidelines:
 				} catch (err) {
 					return textResult(`Failed to steer agent: ${err instanceof Error ? err.message : String(err)}`);
 				}
+			},
+		}),
+	);
+
+	// ---- send_to_agent tool ----
+
+	pi.registerTool(
+		defineTool({
+			name: "send_to_agent",
+			label: "Send to Agent",
+			description:
+				"Send a follow-up message to a completed (or running) agent, continuing its existing session. " +
+				"The agent retains its full conversation context — no context is lost. " +
+				"Use this instead of spawning a new agent when you want to build on prior work. " +
+				"Use run_in_background: true to fire and check later via get_subagent_result.",
+			parameters: Type.Object({
+				agent_id: Type.String({
+					description: "The agent ID to send the message to.",
+				}),
+				message: Type.String({
+					description: "The follow-up message / next task for the agent.",
+				}),
+				run_in_background: Type.Optional(
+					Type.Boolean({
+						description:
+							"If true, returns immediately with the agent ID. Use get_subagent_result to collect the response later. " +
+							"Default: false (waits for the agent to finish and returns its response).",
+					}),
+				),
+			}),
+			promptSnippet: "Send a follow-up message to a previously completed agent (preserves full context)",
+			execute: async (_toolCallId, params, signal, _onUpdate, _ctx) => {
+				const record = manager.getRecord(params.agent_id);
+				if (!record) {
+					return textResult(`Agent not found: "${params.agent_id}". It may have been cleaned up.`);
+				}
+				if (!record.session) {
+					return textResult(
+						`Agent "${params.agent_id}" has no active session (status: ${record.status}). ` +
+							"It may have been cleaned up after 10 minutes of inactivity.",
+					);
+				}
+				if (record.status === "running") {
+					return textResult(
+						`Agent "${params.agent_id}" is currently running. ` +
+							"Use steer_subagent to redirect it mid-run, or wait for it to finish first.",
+					);
+				}
+
+				if (params.run_in_background) {
+					const updated = manager.resumeInBackground(params.agent_id, params.message);
+					if (!updated) {
+						return textResult(`Failed to resume agent "${params.agent_id}" in background.`);
+					}
+					return textResult(
+						`Message sent to agent ${params.agent_id} (running in background). ` +
+							"Call get_subagent_result to collect the response when ready.",
+					);
+				}
+
+				// Foreground: wait for response
+				const updated = await manager.resume(params.agent_id, params.message, signal);
+				if (!updated) {
+					return textResult(`Failed to resume agent "${params.agent_id}".`);
+				}
+				return textResult(updated.result?.trim() || updated.error?.trim() || "No output.");
 			},
 		}),
 	);

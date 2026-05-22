@@ -63,6 +63,12 @@ export class FileTaskStore {
 	private filePath: string | undefined;
 	private lockPath: string | undefined;
 
+	/** The file path this store persists to. Undefined for in-memory stores. */
+	get path(): string | undefined { return this.filePath; }
+
+	/** Force-reload from disk (useful when another process may have written to the store). */
+	reload(): void { this.load(); }
+
 	private nextId = 1;
 	private tasks = new Map<string, Task>();
 
@@ -87,11 +93,41 @@ export class FileTaskStore {
 				if (!t.blocks) t.blocks = [];
 				if (!t.blockedBy) t.blockedBy = [];
 				if (!t.updatedAt) t.updatedAt = t.createdAt;
+				// New fields — default to undefined (no migration needed, optional)
 				this.tasks.set(t.id, t);
 			}
 		} catch {
 			/* corrupt file — start fresh */
 		}
+	}
+
+	/**
+	 * Check if a parallel group is fully complete (all tasks with that groupId are completed).
+	 * Used to resolve blockedByGroup dependencies.
+	 */
+	isGroupComplete(groupId: string): boolean {
+		const groupTasks = Array.from(this.tasks.values()).filter((t) => t.groupId === groupId);
+		if (groupTasks.length === 0) return true; // no tasks in group — treat as complete
+		return groupTasks.every((t) => t.status === "completed");
+	}
+
+	/**
+	 * Get all tasks that are ready to start:
+	 * - status === "pending"
+	 * - no open blockedBy tasks
+	 * - blockedByGroup is resolved (if set)
+	 */
+	getReadyTasks(): Task[] {
+		return this.list().filter((t) => {
+			if (t.status !== "pending") return false;
+			const hasOpenBlocker = t.blockedBy.some((bid) => {
+				const b = this.tasks.get(bid);
+				return b && b.status !== "completed";
+			});
+			if (hasOpenBlocker) return false;
+			if (t.blockedByGroup && !this.isGroupComplete(t.blockedByGroup)) return false;
+			return true;
+		});
 	}
 
 	private save(): void {
@@ -141,6 +177,9 @@ export class FileTaskStore {
 			description?: string;
 			priority?: TaskPriority;
 			activeForm?: string;
+			owner?: string;
+			parentId?: string;
+			groupId?: string;
 			metadata?: Record<string, any>;
 		},
 	): Task {
@@ -153,7 +192,9 @@ export class FileTaskStore {
 				status: "pending",
 				priority: opts?.priority ?? "medium",
 				activeForm: opts?.activeForm,
-				owner: undefined,
+				owner: opts?.owner,
+				parentId: opts?.parentId,
+				groupId: opts?.groupId,
 				metadata: opts?.metadata ?? {},
 				blocks: [],
 				blockedBy: [],
@@ -198,6 +239,11 @@ export class FileTaskStore {
 			priority?: TaskPriority;
 			activeForm?: string;
 			owner?: string;
+			parentId?: string;
+			groupId?: string;
+			blockedByGroup?: string;
+			blockQuestion?: string;
+			blockMessageId?: string;
 			metadata?: Record<string, any>;
 			addBlocks?: string[];
 			addBlockedBy?: string[];
@@ -223,6 +269,15 @@ export class FileTaskStore {
 			const now = Date.now();
 
 			if (fields.status !== undefined) {
+				// blockedByGroup enforcement: reject in_progress if the group is not yet complete
+				if (fields.status === "in_progress" && task.blockedByGroup && !this.isGroupComplete(task.blockedByGroup)) {
+					warnings.push(
+						`Cannot set status to in_progress: task is waiting for group [${task.blockedByGroup}] which is not yet complete. ` +
+						`Complete all tasks in that group first, or remove blockedByGroup from this task.`
+					);
+					// Return early — do not apply any changes
+					return { task, changedFields: [], warnings };
+				}
 				// Timestamp transitions
 				if (task.status !== "in_progress" && fields.status === "in_progress") task.startedAt = now;
 				if (task.status !== "completed" && fields.status === "completed") {
@@ -231,6 +286,14 @@ export class FileTaskStore {
 				}
 				if (task.status === "completed" && fields.status !== "completed") {
 					task.completedAt = undefined;
+				}
+				if (fields.status === "blocked") {
+					task.blockedAt = now;
+				} else if ((task.status as string) === "blocked") {
+					// Was blocked, now transitioning to a different status — clear block metadata
+					task.blockedAt = undefined;
+					if (!fields.blockQuestion) task.blockQuestion = undefined;
+					if (!fields.blockMessageId) task.blockMessageId = undefined;
 				}
 				task.status = fields.status;
 				changedFields.push("status");
@@ -254,6 +317,26 @@ export class FileTaskStore {
 			if (fields.owner !== undefined) {
 				task.owner = fields.owner;
 				changedFields.push("owner");
+			}
+			if (fields.parentId !== undefined) {
+				task.parentId = fields.parentId;
+				changedFields.push("parentId");
+			}
+			if (fields.groupId !== undefined) {
+				task.groupId = fields.groupId;
+				changedFields.push("groupId");
+			}
+			if (fields.blockedByGroup !== undefined) {
+				task.blockedByGroup = fields.blockedByGroup;
+				changedFields.push("blockedByGroup");
+			}
+			if (fields.blockQuestion !== undefined) {
+				task.blockQuestion = fields.blockQuestion;
+				changedFields.push("blockQuestion");
+			}
+			if (fields.blockMessageId !== undefined) {
+				task.blockMessageId = fields.blockMessageId;
+				changedFields.push("blockMessageId");
 			}
 
 			if (fields.metadata !== undefined) {

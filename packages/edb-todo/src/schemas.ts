@@ -21,6 +21,18 @@ export const TodoCreateParams = Type.Object({
 				"Present continuous form shown in the spinner when in_progress (e.g., 'Fixing authentication bug').",
 		}),
 	),
+	parentId: Type.Optional(
+		Type.String({
+			description: "Parent task ID. Creates this as a subtask of the specified task.",
+		}),
+	),
+	groupId: Type.Optional(
+		Type.String({
+			description:
+				"Parallel group ID. Tasks with the same groupId run concurrently. " +
+				"A task with blockedByGroup pointing to this groupId starts only when ALL group tasks complete.",
+		}),
+	),
 	metadata: Type.Optional(
 		Type.Record(Type.String(), Type.Any(), { description: "Arbitrary key-value metadata to attach to the task." }),
 	),
@@ -37,10 +49,13 @@ export const TodoGetParams = Type.Object({
 export const TodoUpdateParams = Type.Object({
 	id: Type.String({ description: "The ID of the task to update." }),
 	status: Type.Optional(
-		Type.Unsafe<"pending" | "in_progress" | "completed" | "deleted">({
+		Type.Unsafe<"pending" | "in_progress" | "completed" | "blocked" | "failed" | "deleted">({
 			type: "string",
-			enum: ["pending", "in_progress", "completed", "deleted"],
-			description: "New status. Use 'deleted' to permanently remove the task.",
+			enum: ["pending", "in_progress", "completed", "blocked", "failed", "deleted"],
+			description:
+				"New status. Use 'deleted' to permanently remove the task. " +
+				"Use 'blocked' when the task is waiting for an answer from the supervisor (set blockQuestion too). " +
+				"Use 'failed' when the task errored or the assigned sub-agent aborted.",
 		}),
 	),
 	content: Type.Optional(Type.String({ description: "New task title." })),
@@ -48,6 +63,14 @@ export const TodoUpdateParams = Type.Object({
 	priority: Type.Optional(StringEnum(["high", "medium", "low"] as const, { description: "New priority." })),
 	activeForm: Type.Optional(Type.String({ description: "Spinner text shown when in_progress." })),
 	owner: Type.Optional(Type.String({ description: "Owner / agent name." })),
+	blockQuestion: Type.Optional(
+		Type.String({ description: "Question text when setting status to 'blocked' (waiting for supervisor answer)." }),
+	),
+	blockedByGroup: Type.Optional(
+		Type.String({
+			description: "Group ID to wait for. Task starts only when ALL tasks in this group are completed.",
+		}),
+	),
 	metadata: Type.Optional(
 		Type.Record(Type.String(), Type.Any(), { description: "Metadata to merge. Set a key to null to delete it." }),
 	),

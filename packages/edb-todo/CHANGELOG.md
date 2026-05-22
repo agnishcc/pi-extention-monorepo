@@ -4,6 +4,26 @@
 
 ## [0.10.9] - 2026-05-18
 
+### Added
+- **Subtask support** — `TaskCreate` gains optional `parentId` param; tasks with a `parentId` render as indented subtasks in the widget
+- **Parallel group support** — `TaskCreate` gains optional `groupId` param; tasks in the same group are treated as parallel; a downstream task can set `blockedByGroup` to wait until all tasks in the group complete
+- **`blocked` status** — new task lifecycle state for in-progress tasks waiting for a supervisor answer; widget renders ⏸ with question preview
+- **`blockQuestion` / `blockMessageId` / `blockedAt` fields** — store the pending question text and bridge message ID when a task is blocked
+- **Attribution display** — tasks where `owner` is set show `[agent-id]` in the widget; orchestrator-created tasks (no owner) show no annotation
+- **Tree widget rendering** — widget now shows tasks followed by their subtasks (indented), replacing the flat list
+- **`blocked` count in widget header** — summary line shows blocked task count in warning colour
+- **edb-bridge integration** — listens for `bridge:task_updated` events and refreshes widget when a sub-agent writes to the shared store; emits `bridge:task_updated` after every task mutation so the parent session widget stays in sync
+- **`todo:store_path` event** — emits the active store file path so edb-subagents can inject it into sub-agent system prompts
+- **System prompt store injection** — reads `<task_store_path>` XML tag from the system prompt (injected by edb-subagents at spawn time) to point sub-agent sessions at the parent's shared task store
+- **`isGroupComplete()` / `getReadyTasks()`** — new store helpers for group-join resolution
+
+### Changed
+- `TaskList` output now includes subtask annotation (`[subtask of #id]`), owner, blocked question preview, and group wait status
+- `TaskGet` output now includes `parentId`, `groupId`, `blockedByGroup`, and blocked question details
+- `TaskUpdate` handles `blocked` status transitions: sets `blockedAt`, clears `blockQuestion`/`blockMessageId` on unblock
+- Widget `MAX_VISIBLE_TASKS` raised from 10 to 12
+- `statusOrder` in `TaskList` updated to include `blocked` (ordered after `in_progress`)
+
 ## [0.10.8] - 2026-05-18
 
 ## [0.10.6] - 2026-05-15

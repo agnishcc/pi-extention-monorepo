@@ -36,6 +36,11 @@ const SYSTEM_REMINDER = `<system-reminder>
 The task tools haven't been used recently. If you're working on tasks that would benefit from tracking progress, consider using TaskCreate to add new tasks and TaskUpdate to update task status (set to in_progress when starting, completed when done). Also consider cleaning up the task list if it has become stale. Only use these if relevant to the current work. This is just a gentle reminder - ignore if not applicable. Make sure that you NEVER mention this reminder to the user
 </system-reminder>`;
 
+// Internal pi.events: edb-bridge emits this when a task_updated message arrives (from sub-agent)
+const EV_BRIDGE_TASK_UPDATED = "bridge:task_updated";
+// We emit this so edb-subagents can read the store path
+const EV_TODO_STORE_PATH = "todo:store_path";
+
 // ── Extension ──────────────────────────────────────────────────────────────────
 
 export default function todoExtension(pi: ExtensionAPI): void {
@@ -66,6 +71,112 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		() => cfg.autoClearCompleted ?? "on_list_complete",
 		AUTO_CLEAR_DELAY,
 	);
+	/** The pi session ID of the current (or most recently started) session. */
+	let currentSessionId: string | null = null;
+
+	// Expose store path to other extensions (edb-subagents reads this to inject PI_TODO into sub-agents)
+	function emitStorePath() {
+		const p = store.path;
+		if (p) pi.events.emit(EV_TODO_STORE_PATH, { path: p });
+	}
+
+	// Listen for bridge:task_updated (emitted by edb-bridge when a sub-agent updates a task)
+	// Re-reads the store and refreshes the widget
+	pi.events.on(EV_BRIDGE_TASK_UPDATED, () => {
+		// Force a re-read from disk (sub-agent may have written to the shared file)
+		if (store.path) {
+			try {
+				store.reload();
+			} catch {
+				/* ignore */
+			}
+		}
+		widget.update();
+	});
+
+	// Listen for bridge:notify_parent — sub-agent progress update with optional task_id
+	// When task_id is provided, update the task's activeForm so it shows in the spinner
+	pi.events.on("bridge:notify_parent", (payload: unknown) => {
+		const p = payload as { taskId?: string; message?: string; agentId?: string } | undefined;
+		if (!p?.taskId || !p.message) return;
+		try {
+			// Update activeForm on the task so the widget spinner shows the progress message
+			store.update(p.taskId, { activeForm: p.message.slice(0, 80) });
+			widget.update();
+		} catch {
+			/* ignore */
+		}
+	});
+
+	// Listen for bridge:ask_supervisor — sub-agent called ask_supervisor with a task_id
+	// Auto-block the linked task so the widget shows ⏸ with the question text
+	pi.events.on("bridge:ask_supervisor", (payload: unknown) => {
+		const p = payload as { taskId?: string; question?: string; messageId?: string } | undefined;
+		if (!p?.taskId || !p.question) return;
+		try {
+			store.update(p.taskId, {
+				status: "blocked",
+				blockQuestion: p.question,
+				blockMessageId: p.messageId,
+			});
+			widget.update();
+		} catch {
+			/* ignore */
+		}
+	});
+
+	// Listen for bridge:supervisor_answered — orchestrator answered, unblock the task
+	pi.events.on("bridge:supervisor_answered", (payload: unknown) => {
+		const p = payload as { taskId?: string } | undefined;
+		if (!p?.taskId) return;
+		try {
+			// Transition back to in_progress and clear block metadata
+			store.update(p.taskId, { status: "in_progress" });
+			widget.update();
+		} catch {
+			/* ignore */
+		}
+	});
+
+	// Listen for todo:update_task — edb-subagents requests a task status update
+	// This avoids edb-subagents duplicating FileTaskStore write logic
+	pi.events.on("todo:update_task", (payload: unknown) => {
+		const p = payload as { taskId?: string; fields?: { status?: string; owner?: string } } | undefined;
+		if (!p?.taskId || !p.fields) return;
+		try {
+			store.update(p.taskId, p.fields as any);
+			widget.update();
+			// Notify bridge to propagate refresh to parent if we're in a sub-agent store
+			notifyBridgeOnChange();
+		} catch {
+			/* ignore */
+		}
+	});
+
+	// Parse task store path from system prompt (for sub-agent sessions)
+	let storePathFromPromptParsed = false;
+
+	function maybeOverrideStoreFromPrompt(systemPrompt: string, _sessionId: string) {
+		if (storePathFromPromptParsed) return;
+		storePathFromPromptParsed = true;
+		const match = systemPrompt.match(/<task_store_path>(.*?)<\/task_store_path>/s);
+		if (!match) return;
+		const path = match[1]!.trim();
+		if (path && path !== store.path) {
+			store = new FileTaskStore(path);
+			widget.setStore(store);
+			autoClear.getStore = () => store;
+			storeUpgraded = true; // prevent upgradeStoreIfNeeded from overriding
+			emitStorePath();
+		}
+	}
+
+	// Helper to emit task_updated through bridge (so parent session widget refreshes)
+	function notifyBridgeOnChange() {
+		// Only route to parent when this is a sub-agent session (store was overridden from system prompt)
+		if (!storeUpgraded) return;
+		pi.events.emit(EV_BRIDGE_TASK_UPDATED, { storePath: store.path, sessionId: currentSessionId });
+	}
 
 	let storeUpgraded = false;
 	let persistedTasksShown = false;
@@ -81,6 +192,7 @@ export default function todoExtension(pi: ExtensionAPI): void {
 			}
 		}
 		storeUpgraded = true;
+		emitStorePath();
 	}
 
 	function showPersistedTasks(isResume = false) {
@@ -132,7 +244,10 @@ export default function todoExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async (event, ctx) => {
 		cwd = ctx.cwd;
 		cfg = loadTodoConfig(cwd);
+		currentSessionId = ctx.sessionManager.getSessionId();
 		widget.setUICtx(ctx.ui);
+		// For sub-agent sessions: read store path from system prompt (injected by edb-subagents)
+		maybeOverrideStoreFromPrompt(event.systemPrompt, ctx.sessionManager.getSessionId());
 		upgradeStoreIfNeeded(ctx.sessionManager.getSessionId());
 		showPersistedTasks();
 		const block = buildSystemPromptBlock(store);
@@ -150,8 +265,10 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		const isResume = event.reason === "resume";
 		cwd = ctx.cwd;
 		cfg = loadTodoConfig(cwd);
+		currentSessionId = ctx.sessionManager.getSessionId();
 		storeUpgraded = false;
 		persistedTasksShown = false;
+		storePathFromPromptParsed = false;
 		currentTurn = 0;
 		lastTaskToolUseTurn = 0;
 		reminderInjectedThisCycle = false;
@@ -224,8 +341,11 @@ All tasks are created with status \`pending\`.
 				description: params.description,
 				priority: params.priority as TaskPriority | undefined,
 				activeForm: params.activeForm,
+				parentId: params.parentId as string | undefined,
+				groupId: params.groupId as string | undefined,
 				metadata: params.metadata,
 			});
+			notifyBridgeOnChange();
 			widget.setUICtx(ctx.ui);
 			widget.update();
 			return {
@@ -286,7 +406,7 @@ Use TaskGet with a specific task ID to view full details including description.`
 					details: { tasks: [] } satisfies TaskDetails,
 				};
 
-			const statusOrder: Record<string, number> = { pending: 0, in_progress: 1, completed: 2 };
+			const statusOrder: Record<string, number> = { pending: 0, in_progress: 1, blocked: 2, completed: 3 };
 			const sorted = [...tasks].sort((a, b) => {
 				const so = (statusOrder[a.status] ?? 0) - (statusOrder[b.status] ?? 0);
 				if (so !== 0) return so;
@@ -295,11 +415,19 @@ Use TaskGet with a specific task ID to view full details including description.`
 
 			const lines = sorted.map((task) => {
 				let line = `[${task.status}] [${task.priority}] #${task.id} ${task.content}`;
+				if (task.parentId) line += ` [subtask of #${task.parentId}]`;
+				if (task.owner) line += ` [owner: ${task.owner}]`;
+				if (task.status === "blocked" && task.blockQuestion) {
+					line += ` [blocked: "${task.blockQuestion.slice(0, 60)}"]`;
+				}
 				const openBlockers = task.blockedBy.filter((bid) => {
 					const b = store.get(bid);
 					return b && b.status !== "completed";
 				});
 				if (openBlockers.length > 0) line += ` [blocked by ${openBlockers.map((id) => `#${id}`).join(", ")}]`;
+				if (task.blockedByGroup && !store.isGroupComplete(task.blockedByGroup)) {
+					line += ` [waiting for group: ${task.blockedByGroup}]`;
+				}
 				return line;
 			});
 
@@ -363,6 +491,15 @@ Returns full task details:
 				`Priority: ${task.priority}`,
 			];
 			if (task.owner) lines.push(`Owner: ${task.owner}`);
+			if (task.parentId) lines.push(`Subtask of: #${task.parentId}`);
+			if (task.groupId) lines.push(`Parallel group: ${task.groupId}`);
+			if (task.blockedByGroup) {
+				const groupDone = store.isGroupComplete(task.blockedByGroup);
+				lines.push(`Blocked by group: ${task.blockedByGroup} (${groupDone ? "resolved" : "waiting"})`);
+			}
+			if (task.status === "blocked" && task.blockQuestion) {
+				lines.push(`Blocked waiting for answer: "${task.blockQuestion}"`);
+			}
 			lines.push(`Description: ${desc}`);
 
 			const openBlockers = task.blockedBy.filter((bid) => {
@@ -471,6 +608,14 @@ Set dependencies:
 				};
 			}
 
+			// Early return from enforcement (e.g. blockedByGroup)
+			if (changedFields.length === 0 && warnings.length > 0) {
+				return {
+					content: [{ type: "text", text: `⚠ Not updated: ${warnings.join("; ")}` }],
+					details: { tasks: [...store.list()] } satisfies TaskDetails,
+				};
+			}
+
 			if (fields.status === "in_progress") {
 				widget.setActiveTask(id);
 				autoClear.resetBatchCountdown();
@@ -481,8 +626,11 @@ Set dependencies:
 				autoClear.trackCompletion(id, currentTurn);
 			} else if (fields.status === "deleted") {
 				widget.setActiveTask(id, false);
+			} else if (fields.status === "blocked") {
+				widget.setActiveTask(id, false); // stop spinner while blocked
 			}
 
+			notifyBridgeOnChange();
 			widget.setUICtx(ctx.ui);
 			widget.update();
 
