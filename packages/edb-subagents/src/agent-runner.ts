@@ -2,6 +2,7 @@
  * agent-runner.ts — Core execution engine: creates sessions, runs agents, collects results.
  */
 
+import { existsSync } from "node:fs";
 import type { Model } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -15,6 +16,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import {
+	BUILTIN_TOOL_NAMES,
 	getAgentConfig,
 	getConfig,
 	getMemoryToolNames,
@@ -30,7 +32,40 @@ import { preloadSkills } from "./skill-loader.js";
 import type { SubagentType, ThinkingLevel } from "./types.js";
 
 /** Names of tools registered by this extension that subagents must NOT inherit. */
-const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent"];
+const EXCLUDED_TOOL_NAMES = ["Agent", "get_subagent_result", "steer_subagent", "send_to_agent"];
+
+/**
+ * Extract parent session extension file paths from the parent's tool registry.
+ * These are passed to the sub-agent's DefaultResourceLoader as additionalExtensionPaths,
+ * so sub-agents get access to the same extension tools as the parent session
+ * (e.g., TaskCreate, TaskUpdate from edb-todo).
+ *
+ * Excludes:
+ * - Built-in / SDK tools (paths inside node_modules)
+ * - Synthetic paths (non-existent on disk)
+ * - Extensions where ALL registered tools are in the EXCLUDED_TOOL_NAMES list
+ *   (i.e., edb-subagents itself — only has Agent, get_subagent_result, steer_subagent)
+ */
+function extractParentExtensionPaths(pi: ExtensionAPI): string[] {
+	const excluded = new Set(EXCLUDED_TOOL_NAMES);
+	const pathTools = new Map<string, string[]>();
+
+	for (const tool of pi.getAllTools()) {
+		const p = tool.sourceInfo?.path ?? "";
+		if (!p) continue;
+		if (!pathTools.has(p)) pathTools.set(p, []);
+		pathTools.get(p)!.push(tool.name);
+	}
+
+	const result: string[] = [];
+	for (const [p, toolNames] of pathTools) {
+		if (p.includes("node_modules")) continue;
+		if (!existsSync(p)) continue;
+		if (toolNames.every((name) => excluded.has(name))) continue;
+		result.push(p);
+	}
+	return result;
+}
 
 /** Default max turns. undefined = unlimited (no turn limit). */
 let defaultMaxTurns: number | undefined;
@@ -109,6 +144,17 @@ export interface RunOptions {
 	thinkingLevel?: ThinkingLevel;
 	/** Override working directory (e.g. for worktree isolation). */
 	cwd?: string;
+	/**
+	 * edb-bridge context: injected into the sub-agent's system prompt so edb-bridge + edb-todo
+	 * extensions in the sub-agent session can connect back to the orchestrator.
+	 */
+	bridgeContext?: {
+		parentSessionId: string;
+		agentId: string;
+		storePath?: string;
+		taskId?: string;
+		agentIsSubtask?: boolean;
+	};
 	/** Called on tool start/end with activity info. */
 	onToolActivity?: (activity: ToolActivity) => void;
 	/** Called on streaming text deltas from the assistant response. */
@@ -197,9 +243,20 @@ export async function runAgent(
 	// Build prompt extras (memory, skill preloading)
 	const extras: PromptExtras = {};
 
+	// Inject edb-bridge context if provided (enables ask_supervisor, notify_parent, shared task store)
+	if (options.bridgeContext) {
+		extras.bridgeContext = options.bridgeContext;
+	}
+
 	// Resolve extensions/skills: isolated overrides to false
 	const extensions = options.isolated ? false : config.extensions;
 	const skills = options.isolated ? false : config.skills;
+
+	// Extract parent session extension paths so sub-agents inherit the same extension
+	// tools (e.g. TaskCreate/TaskUpdate from edb-todo). Without this, sub-agents
+	// running in a session started with `-ne -e <path>` would have no extension tools
+	// because the DefaultResourceLoader doesn't know about the parent's explicit -e paths.
+	const parentExtensionPaths = extensions !== false ? extractParentExtensionPaths(options.pi) : [];
 
 	// Skill preloading: when skills is string[], preload their content into prompt
 	if (Array.isArray(skills)) {
@@ -259,7 +316,12 @@ export async function runAgent(
 	const loader = new DefaultResourceLoader({
 		cwd: effectiveCwd,
 		agentDir,
-		noExtensions: extensions === false,
+		// When we have explicit parent extension paths, suppress standard discovery so
+		// sub-agents don't accidentally pick up globally installed extensions the parent
+		// didn't opt into (e.g. when parent was started with -ne). Standard discovery
+		// is kept when there are no explicit paths (parent has no extensions).
+		noExtensions: extensions === false || parentExtensionPaths.length > 0,
+		additionalExtensionPaths: parentExtensionPaths,
 		noSkills,
 		noPromptTemplates: true,
 		noThemes: true,
@@ -282,7 +344,13 @@ export async function runAgent(
 		settingsManager: SettingsManager.create(effectiveCwd, agentDir),
 		modelRegistry: ctx.modelRegistry,
 		model,
-		tools: toolNames,
+		// Do NOT pass tools: [...] or noTools here. Passing tools: toolNames creates a
+		// hard allowedToolNames restriction that permanently blocks extension tools from
+		// the registry even after bindExtensions() registers them (setActiveToolsByName
+		// silently ignores names not in the registry). Using noTools: "all" empties the
+		// registry entirely. Instead, let the session use its default (full registry:
+		// all built-ins + all extension tools from the loader), then restrict via
+		// setActiveToolsByName after bindExtensions().
 		resourceLoader: loader,
 	};
 	if (thinkingLevel) {
@@ -294,33 +362,9 @@ export async function runAgent(
 	const baseSessionName = agentConfig?.name ?? type;
 	session.setSessionName(options.agentId ? `${baseSessionName}#${options.agentId.slice(0, 8)}` : baseSessionName);
 
-	// Build disallowed tools set from agent config
-	const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
-
-	// Filter active tools: remove our own tools to prevent nesting,
-	// apply extension allowlist if specified, and apply disallowedTools denylist
-	if (extensions !== false) {
-		const builtinToolNameSet = new Set(toolNames);
-		const activeTools = session.getActiveToolNames().filter((t) => {
-			if (EXCLUDED_TOOL_NAMES.includes(t)) return false;
-			if (disallowedSet?.has(t)) return false;
-			if (builtinToolNameSet.has(t)) return true;
-			if (Array.isArray(extensions)) {
-				return extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
-			}
-			return true;
-		});
-		session.setActiveToolsByName(activeTools);
-	} else if (disallowedSet) {
-		// Even with extensions disabled, apply denylist to built-in tools
-		const activeTools = session.getActiveToolNames().filter((t) => !disallowedSet.has(t));
-		session.setActiveToolsByName(activeTools);
-	}
-
-	// Bind extensions so that session_start fires and extensions can initialize
-	// (e.g. loading credentials, setting up state). Placed after tool filtering
-	// so extension-provided skills/prompts from extendResourcesFromExtensions()
-	// respect the active tool set. All ExtensionBindings fields are optional.
+	// Bind extensions FIRST so that extension tools (e.g. TaskCreate from edb-todo)
+	// are registered before we query the active tool set. This ensures extension
+	// tools are available for filtering (vs. being invisible at query time).
 	await session.bindExtensions({
 		onError: (err) => {
 			options.onToolActivity?.({
@@ -329,6 +373,52 @@ export async function runAgent(
 			});
 		},
 	});
+
+	// Build disallowed tools set from agent config
+	const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : undefined;
+
+	// Filter active tools: remove our own tools to prevent nesting,
+	// apply extension allowlist if specified, and apply disallowedTools denylist.
+	//
+	// SOURCE: Use extensionRunner.getAllRegisteredTools() for extension tools — this
+	// bypasses any session-level allowlist restriction and gives us ALL tools registered
+	// by extensions. Combined with BUILTIN_TOOL_NAMES we get a complete picture.
+	//
+	// createAgentSession is called without tools/noTools so the session uses its default
+	// (full registry, all built-ins + extension tools from the loader, no allowlist).
+	// setActiveToolsByName then restricts to exactly what this agent type should have.
+	//
+	// Built-in tools (bash, read, edit, write, grep, find, ls) are gated by the
+	// per-agent builtinToolNames config. Extension tools (TaskCreate, ask_supervisor…)
+	// are gated by the extensions config (true = all, string[] = allowlist, false = none).
+	if (extensions !== false) {
+		const builtinToolNameSet = new Set(toolNames);
+		const allBuiltins = new Set(BUILTIN_TOOL_NAMES);
+		// Get all extension tools from the extension runner (not filtered by any allowlist)
+		const registeredExtensionToolNames = session.extensionRunner
+			.getAllRegisteredTools()
+			.map((t) => t.definition.name);
+		// Combine: built-in tools + all registered extension tools
+		const allKnown = [...new Set([...BUILTIN_TOOL_NAMES, ...registeredExtensionToolNames])];
+		const activeTools = allKnown.filter((t) => {
+			if (EXCLUDED_TOOL_NAMES.includes(t)) return false;
+			// Built-in tools: respect the per-agent builtinToolNames allowlist
+			if (allBuiltins.has(t)) return builtinToolNameSet.has(t);
+			// Extension tools: whitelist (allowed_tools) wins over blacklist (disallowed_tools)
+			if (Array.isArray(extensions)) {
+				// Whitelist mode — disallowedTools is ignored
+				return extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
+			}
+			// Blacklist mode — exclude disallowed tools
+			if (disallowedSet?.has(t)) return false;
+			return true; // extensions === true → include all extension tools
+		});
+		session.setActiveToolsByName(activeTools);
+	} else if (disallowedSet) {
+		// Even with extensions disabled, apply denylist to built-in tools
+		const activeTools = session.getActiveToolNames().filter((t) => !disallowedSet.has(t));
+		session.setActiveToolsByName(activeTools);
+	}
 
 	options.onSessionCreated?.(session);
 

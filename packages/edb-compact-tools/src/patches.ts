@@ -155,6 +155,7 @@ export function registerDelegatingTool(
 		label: name,
 		description: original.description,
 		promptSnippet: (original as any).promptSnippet,
+		promptGuidelines: (original as any).promptGuidelines,
 		parameters: original.parameters as any,
 		renderShell: "self",
 		async execute(id: string, params: unknown, signal?: AbortSignal, onUpdate?: unknown, ctx?: any) {

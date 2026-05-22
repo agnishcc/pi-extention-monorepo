@@ -54,9 +54,12 @@ function loadFromDir(dir: string, agents: Map<string, AgentConfig>, source: "pro
 			name,
 			displayName: str(fm.display_name),
 			description: str(fm.description) ?? name,
+			context: str(fm.context),
 			builtinToolNames: csvList(fm.tools, BUILTIN_TOOL_NAMES),
 			disallowedTools: csvListOptional(fm.disallowed_tools),
-			extensions: inheritField(fm.extensions ?? fm.inherit_extensions),
+			// allowed_tools: whitelist for extension tools (wins over disallowed_tools when both set)
+			// extensions: legacy field — string[] format is treated as allowed_tools whitelist
+			extensions: parseExtensions(fm.allowed_tools ?? fm.extensions),
 			skills: inheritField(fm.skills ?? fm.inherit_skills),
 			model: str(fm.model),
 			fallbackModels: csvListOptional(fm.fallback_models),
@@ -137,4 +140,23 @@ function inheritField(val: unknown): true | string[] | false {
 	if (val === false || val === "none") return false;
 	const items = csvList(val, []);
 	return items.length > 0 ? items : false;
+}
+
+/**
+ * Parse the extensions/allowed_tools field.
+ * - undefined/null/true → all extension tools (true)
+ * - false/"none" → no extension tools (false)
+ * - "TaskCreate, ask_supervisor" → whitelist of tool name patterns (string[])
+ * - absolute path (legacy executor.md style) → treat as true (path-based extensions
+ *   are handled by extractParentExtensionPaths; ignore the path here)
+ */
+function parseExtensions(val: unknown): true | string[] | false {
+	if (val === undefined || val === null || val === true) return true;
+	if (val === false || val === "none") return false;
+	// Legacy: absolute path string → treat as "all extensions enabled"
+	if (typeof val === "string" && (val.startsWith("/") || val.startsWith(".") || val.includes("node_modules"))) {
+		return true;
+	}
+	const items = csvList(val, []);
+	return items.length > 0 ? items : true;
 }

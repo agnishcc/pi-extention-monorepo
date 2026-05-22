@@ -15,6 +15,8 @@ export const DEFAULT_AGENTS: Map<string, AgentConfig> = new Map([
 			name: "general-purpose",
 			displayName: "Agent",
 			description: "General-purpose agent for complex, multi-step tasks",
+			context:
+				"Use for any multi-step task that requires reasoning, writing code, or making changes. The default choice when no specialized agent fits.",
 			// builtinToolNames omitted — means "all available tools" (resolved at lookup time)
 			// inheritContext / runInBackground / isolated omitted — strategy fields, callers decide per-call.
 			// Setting them to false would lock callsite intent (see resolveAgentInvocationConfig in invocation-config.ts).
@@ -31,6 +33,8 @@ export const DEFAULT_AGENTS: Map<string, AgentConfig> = new Map([
 			name: "Explore",
 			displayName: "Explore",
 			description: "Fast codebase exploration agent (read-only)",
+			context:
+				"Use when you need to understand an unfamiliar codebase, find where something is implemented, or answer 'where is X' / 'how does Y work' questions. Read-only, fast, and cheap.",
 			builtinToolNames: READ_ONLY_TOOLS,
 			extensions: true,
 			skills: true,
@@ -73,6 +77,8 @@ Use Bash ONLY for read-only operations: ls, git status, git log, git diff, find,
 			name: "Plan",
 			displayName: "Plan",
 			description: "Software architect for implementation planning (read-only)",
+			context:
+				"Use when you need a detailed implementation plan before writing code. Analyzes the codebase and produces a step-by-step plan without making any changes.",
 			builtinToolNames: READ_ONLY_TOOLS,
 			extensions: true,
 			skills: true,

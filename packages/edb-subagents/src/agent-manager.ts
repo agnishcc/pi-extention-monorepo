@@ -34,6 +34,8 @@ interface SpawnArgs {
 
 interface SpawnOptions {
 	description: string;
+	/** Short memorable name (e.g. 'Quinn'). Shown in agent widget. Falls back to description if not set. */
+	agentName?: string;
 	model?: Model<any>;
 	maxTurns?: number;
 	isolated?: boolean;
@@ -54,6 +56,19 @@ interface SpawnOptions {
 	invocation?: AgentInvocation;
 	/** Parent abort signal — when aborted, the subagent is also stopped. */
 	signal?: AbortSignal;
+	/**
+	 * edb-bridge context: injected into sub-agent system prompt so it can communicate back.
+	 * Set by edb-subagents when bridgeSessionId is available.
+	 */
+	bridgeContext?: {
+		parentSessionId: string;
+		agentId: string;
+		storePath?: string;
+		taskId?: string;
+		agentIsSubtask?: boolean;
+	};
+	/** Called when the agent lifecycle changes: start, complete (success/steered/aborted), or failed (error/stopped). */
+	onTaskLifecycle?: (event: "start" | "complete" | "failed") => void;
 	/** Called on tool start/end with activity info (for streaming progress to UI). */
 	onToolActivity?: (activity: ToolActivity) => void;
 	/** Called on streaming text deltas from the assistant response. */
@@ -144,6 +159,8 @@ export class AgentManager {
 			id,
 			type,
 			description: options.description,
+			agentName: options.agentName,
+			taskId: options.bridgeContext?.taskId,
 			status: options.isBackground ? "queued" : "running",
 			toolUses: 0,
 			startedAt: Date.now(),
@@ -194,6 +211,11 @@ export class AgentManager {
 		record.status = "running";
 		record.startedAt = Date.now();
 		if (options.isBackground) this.runningBackground++;
+		try {
+			options.onTaskLifecycle?.("start");
+		} catch {
+			/* ignore */
+		}
 		this.onStart?.(record);
 
 		// Wire parent abort signal to stop the subagent when the parent is interrupted
@@ -218,6 +240,8 @@ export class AgentManager {
 			thinkingLevel: options.thinkingLevel,
 			cwd: worktreeCwd,
 			signal: record.abortController!.signal,
+			// Pass through edb-bridge context if provided
+			...(options.bridgeContext ? { bridgeContext: options.bridgeContext } : {}),
 			onToolActivity: (activity: ToolActivity) => {
 				if (activity.type === "end") record.toolUses++;
 				options.onToolActivity?.(activity);
@@ -303,6 +327,13 @@ export class AgentManager {
 					}
 				}
 
+				// Auto-lifecycle: notify task management regardless of foreground/background
+				try {
+					options.onTaskLifecycle?.("complete");
+				} catch {
+					/* ignore */
+				}
+
 				if (options.isBackground) {
 					this.runningBackground--;
 					try {
@@ -342,6 +373,13 @@ export class AgentManager {
 					} catch {
 						/* ignore cleanup errors */
 					}
+				}
+
+				// Auto-lifecycle: notify task management on failure
+				try {
+					options.onTaskLifecycle?.("failed");
+				} catch {
+					/* ignore */
 				}
 
 				if (options.isBackground) {
@@ -388,6 +426,58 @@ export class AgentManager {
 		const id = this.spawn(pi, ctx, type, prompt, { ...options, isBackground: false });
 		const record = this.agents.get(id)!;
 		await record.promise;
+		return record;
+	}
+
+	/**
+	 * Resume an existing agent session with a new prompt in the background (non-blocking).
+	 * Returns immediately; the record's promise resolves when done.
+	 */
+	resumeInBackground(id: string, prompt: string): AgentRecord | undefined {
+		const record = this.agents.get(id);
+		if (!record?.session) return undefined;
+
+		record.status = "running";
+		record.startedAt = Date.now();
+		record.completedAt = undefined;
+		record.result = undefined;
+		record.error = undefined;
+
+		record.promise = resumeAgent(record.session, prompt, {
+			onToolActivity: (activity) => {
+				if (activity.type === "end") record.toolUses++;
+			},
+			onAssistantUsage: (usage) => {
+				addUsage(record.lifetimeUsage, usage);
+			},
+			onCompaction: (info) => {
+				record.compactionCount++;
+				this.onCompact?.(record, info);
+			},
+		})
+			.then((responseText) => {
+				record.status = "completed";
+				record.result = responseText;
+				record.completedAt = Date.now();
+				try {
+					this.onComplete?.(record);
+				} catch {
+					/* ignore */
+				}
+				return responseText;
+			})
+			.catch((err) => {
+				record.status = "error";
+				record.error = err instanceof Error ? err.message : String(err);
+				record.completedAt = Date.now();
+				try {
+					this.onComplete?.(record);
+				} catch {
+					/* ignore */
+				}
+				return "";
+			});
+
 		return record;
 	}
 

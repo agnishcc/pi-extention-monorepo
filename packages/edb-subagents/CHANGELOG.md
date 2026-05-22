@@ -4,6 +4,17 @@
 
 ## [0.10.9] - 2026-05-18
 
+### Added
+- **edb-bridge integration** — injects `<bridge_parent_session>`, `<bridge_agent_id>`, and `<task_store_path>` XML tags into sub-agent system prompts at spawn time
+- **`bridgeContext` option** — new optional field on `SpawnOptions` and `RunOptions`; when present, bridge metadata is embedded into the sub-agent's prompt extras
+- **`bridge:ready` listener** — captures the parent session's broker session ID when edb-bridge connects
+- **`todo:store_path` listener** — captures the active edb-todo task store path for injection into sub-agents
+- **`bridgeContext` threading** — passes bridge context through `manager.spawn()`, `manager.spawnAndWait()`, and the `sharedRunOptions` in `agent-manager.ts`
+
+### Changed
+- `prompts.ts` `PromptExtras` gains optional `bridgeContext` field; when set, a `<bridge_context>` XML block is appended to the sub-agent system prompt
+- `agent-runner.ts` reads `options.bridgeContext` and populates `extras.bridgeContext` before building the agent prompt
+
 ## [0.10.8] - 2026-05-18
 
 ### Changed

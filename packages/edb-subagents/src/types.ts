@@ -55,6 +55,12 @@ export interface AgentConfig {
 	enabled?: boolean;
 	/** Where this agent was loaded from */
 	source?: "default" | "project" | "global";
+	/**
+	 * Usage context — when and why to use this agent.
+	 * Injected into the main agent's system prompt so it knows which agent to spawn for what tasks.
+	 * Example: "Use when exploring an unfamiliar codebase to find where something is implemented."
+	 */
+	context?: string;
 }
 
 export type JoinMode = "async" | "group" | "smart";
@@ -63,6 +69,10 @@ export interface AgentRecord {
 	id: string;
 	type: SubagentType;
 	description: string;
+	/** Short memorable name given by the orchestrator (e.g. 'Quinn'). Shown in widget alongside description. */
+	agentName?: string;
+	/** Linked task ID in the shared task store. Used for blocked-state check in get_subagent_result. */
+	taskId?: string;
 	status: "queued" | "running" | "completed" | "steered" | "aborted" | "stopped" | "error";
 	result?: string;
 	error?: string;

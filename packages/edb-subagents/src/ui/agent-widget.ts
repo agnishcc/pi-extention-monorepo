@@ -273,6 +273,7 @@ export class AgentWidget {
 			type: SubagentType;
 			status: string;
 			description: string;
+			agentName?: string;
 			toolUses: number;
 			startedAt: number;
 			completedAt?: number;
@@ -312,7 +313,7 @@ export class AgentWidget {
 		parts.push(duration);
 
 		const modeTag = modeLabel ? ` ${theme.fg("dim", `(${modeLabel})`)}` : "";
-		return `${icon} ${theme.fg("dim", name)}${modeTag}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
+		return `${icon} ${theme.fg("dim", name)}${modeTag}${a.agentName ? `  ${theme.fg("dim", a.agentName)}` : ""}  ${theme.fg("dim", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", parts.join(" · "))}${statusText}`;
 	}
 
 	/**
@@ -373,7 +374,7 @@ export class AgentWidget {
 			runningLines.push([
 				truncate(
 					theme.fg("dim", "├─") +
-						` ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`,
+						` ${theme.fg("accent", frame)} ${theme.bold(name)}${modeTag}${a.agentName ? `  ${theme.fg("accent", theme.bold(a.agentName))}` : ""}  ${theme.fg("muted", a.description)} ${theme.fg("dim", "·")} ${theme.fg("dim", statsText)}`,
 				),
 				truncate(theme.fg("dim", "│  ") + theme.fg("dim", `  ⎿  ${activity}`)),
 			]);
