@@ -2,7 +2,7 @@
 
 All notable changes to `@agnishc/edb-bridge` will be documented in this file.
 
-## [0.10.9] - 2026-05-18
+## [Unreleased]
 
 ### Added
 
@@ -13,3 +13,5 @@ All notable changes to `@agnishc/edb-bridge` will be documented in this file.
 - `answer_subagent` tool for orchestrators (reply to pending sub-agent questions)
 - Internal `pi.events` API: `bridge:ready`, `bridge:task_updated`
 - `PI_BRIDGE_PARENT_SESSION` / `PI_BRIDGE_AGENT_ID` env var support
+
+## [0.10.9] - 2026-05-18

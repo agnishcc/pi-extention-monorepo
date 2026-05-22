@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- Unit tests for new rendering modules
+
+### Changed
+- Modularized frame rendering with paragraph classes and per-tool views
+
 ## [0.10.9] - 2026-05-18
 
 ## [0.10.8] - 2026-05-18

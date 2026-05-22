@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+- Add missing `unlinkSync` import
+
+### Added
+- Bridge context threading and promptGuidelines on tools
+
 ## [0.10.9] - 2026-05-18
 
 ### Added

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Keyboard shortcut and session persistence for agent mode switching
+
 ## [0.10.9] - 2026-05-18
 
 ## [0.10.8] - 2026-05-18
