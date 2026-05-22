@@ -94,12 +94,14 @@ export class ConversationViewer implements Component {
 		this.lastInnerW = innerW;
 		const lines: string[] = [];
 
+		const normalizeForRender = (s: string) => s.replace(/\t/g, "  ");
 		const pad = (s: string, len: number) => {
-			const vis = visibleWidth(s);
-			return s + " ".repeat(Math.max(0, len - vis));
+			const normalized = normalizeForRender(s);
+			const clipped = truncateToWidth(normalized, len, "");
+			const vis = visibleWidth(clipped);
+			return clipped + " ".repeat(Math.max(0, len - vis));
 		};
-		const row = (content: string) =>
-			`${th.fg("border", "│")} ${truncateToWidth(pad(content, innerW), innerW)} ${th.fg("border", "│")}`;
+		const row = (content: string) => `${th.fg("border", "│")} ${pad(content, innerW)} ${th.fg("border", "│")}`;
 		const hrTop = th.fg("border", `╭${"─".repeat(width - 2)}╮`);
 		const hrBot = th.fg("border", `╰${"─".repeat(width - 2)}╯`);
 		const hrMid = row(th.fg("dim", "─".repeat(innerW)));
