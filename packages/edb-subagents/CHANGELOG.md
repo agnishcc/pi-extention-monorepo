@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.12.0] - 2026-05-22
 
 ### Fixed
 - Add missing `unlinkSync` import

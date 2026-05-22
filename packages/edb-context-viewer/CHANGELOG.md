@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.12.0] - 2026-05-22
 
 ### Changed
 - Show skills and safe-available tokens in stats tab

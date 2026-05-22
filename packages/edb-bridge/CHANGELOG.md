@@ -2,7 +2,7 @@
 
 All notable changes to `@agnishc/edb-bridge` will be documented in this file.
 
-## [Unreleased]
+## [0.12.0] - 2026-05-22
 
 ### Added
 

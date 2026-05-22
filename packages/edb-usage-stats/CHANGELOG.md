@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.12.0] - 2026-05-22
 
 ### Added
 - edb-bridge integration for sub-task progress updates
