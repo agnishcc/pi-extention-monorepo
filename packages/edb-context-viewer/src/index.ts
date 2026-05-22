@@ -17,6 +17,7 @@
 import {
 	buildSessionContext,
 	type ContextUsage,
+	DEFAULT_COMPACTION_SETTINGS,
 	type ExtensionAPI,
 	type ExtensionCommandContext,
 	type SessionContext,
@@ -197,6 +198,16 @@ function buildToolsText(activeToolDefs: { name: string; description?: string; pa
 }
 
 /** Build the token breakdown, scaling raw char-based estimates to match actual token count. */
+function isSkillPath(path: unknown): boolean {
+	if (typeof path !== "string") return false;
+	return /(^|\/)\.agents\/skills\/|(^|\/)\.pi\/agent\/.*\/skills\/|(^|\/)skills\/[^/]+\/SKILL\.md$/i.test(path);
+}
+
+function isSkillReadToolCall(block: any): boolean {
+	if (block?.name !== "read") return false;
+	return isSkillPath(block.arguments?.path ?? block.input?.path ?? block.args?.path);
+}
+
 function buildTokenBreakdown(
 	systemPrompt: string,
 	activeToolDefs: unknown[],
@@ -206,6 +217,7 @@ function buildTokenBreakdown(
 	if (!usage?.tokens || !usage.contextWindow) return null;
 
 	const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+	const reserveTokens = Math.min(DEFAULT_COMPACTION_SETTINGS.reserveTokens, usage.contextWindow);
 
 	const systemRaw = estimateTokens(systemPrompt);
 	const toolDefsRaw = estimateTokens(JSON.stringify(activeToolDefs));
@@ -213,6 +225,8 @@ function buildTokenBreakdown(
 	let msgTokensRaw = 0;
 	let toolCallTokensRaw = 0;
 	let toolResultTokensRaw = 0;
+	let skillsRaw = 0;
+	const skillToolCallIds = new Set<string>();
 
 	for (const entry of branch) {
 		if (entry.type === "message" && entry.message) {
@@ -230,13 +244,24 @@ function buildTokenBreakdown(
 				else if (Array.isArray(m.content)) {
 					for (const p of m.content) {
 						if (p?.type === "text") msgTokensRaw += estimateTokens(p.text ?? "");
-						else if (p?.type === "toolCall") toolCallTokensRaw += estimateTokens(JSON.stringify(p));
+						else if (p?.type === "toolCall") {
+							if (isSkillReadToolCall(p)) {
+								skillsRaw += estimateTokens(JSON.stringify(p));
+								if (p.id) skillToolCallIds.add(p.id);
+							} else {
+								toolCallTokensRaw += estimateTokens(JSON.stringify(p));
+							}
+						}
 					}
 				}
 			} else if (m.role === "toolResult") {
+				const isSkillResult = skillToolCallIds.has(m.toolCallId);
 				if (Array.isArray(m.content)) {
 					for (const p of m.content) {
-						if (p?.type === "text") toolResultTokensRaw += estimateTokens(p.text ?? "");
+						if (p?.type === "text") {
+							if (isSkillResult) skillsRaw += estimateTokens(p.text ?? "");
+							else toolResultTokensRaw += estimateTokens(p.text ?? "");
+						}
 					}
 				}
 			} else if (m.role === "bashExecution") {
@@ -248,22 +273,26 @@ function buildTokenBreakdown(
 		}
 	}
 
-	const totalRaw = systemRaw + toolDefsRaw + msgTokensRaw + toolCallTokensRaw + toolResultTokensRaw;
+	const totalRaw = systemRaw + skillsRaw + toolDefsRaw + msgTokensRaw + toolCallTokensRaw + toolResultTokensRaw;
 	const ratio = totalRaw > 0 ? usage.tokens / totalRaw : 1;
 
 	const sys = Math.round(systemRaw * ratio);
-	const tools = Math.round(toolDefsRaw * ratio);
+	const skills = Math.round(skillsRaw * ratio);
+	const systemTools = Math.round(toolDefsRaw * ratio);
 	const msgs = Math.round(msgTokensRaw * ratio);
-	const toolCalls = Math.round((toolCallTokensRaw + toolResultTokensRaw) * ratio);
-	const accounted = sys + tools + msgs + toolCalls;
+	const tools = Math.round((toolCallTokensRaw + toolResultTokensRaw) * ratio);
+	const accounted = sys + skills + systemTools + msgs + tools;
 
 	return {
 		total: usage.tokens,
 		contextWindow: usage.contextWindow,
 		percent: usage.percent ?? (usage.tokens / usage.contextWindow) * 100,
+		reserveTokens,
+		safeAvailable: Math.max(0, usage.contextWindow - reserveTokens - usage.tokens),
 		systemPrompt: sys,
-		systemTools: tools,
-		toolCalls,
+		systemTools,
+		tools,
+		skills,
 		messages: msgs,
 		other: Math.max(0, usage.tokens - accounted),
 	};
@@ -322,8 +351,13 @@ export default function contextViewerExtension(pi: ExtensionAPI): void {
 				}
 				const messagesText = messagesLines.join("\n");
 
+				const modelName = ctx.model?.id ?? (ctx.model as any)?.modelId ?? "unknown model";
+
 				const tabs = [
-					new StatsTabContent(breakdown, theme),
+					new StatsTabContent(breakdown, theme, {
+						name: modelName,
+						contextWindow: ctx.model?.contextWindow ?? usage?.contextWindow,
+					}),
 					new ScrollableTabContent(
 						{ rawText: systemPrompt, displayLines: buildNumberedLines(systemPrompt, theme), theme },
 						"System",

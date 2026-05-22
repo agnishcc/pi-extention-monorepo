@@ -68,10 +68,13 @@ describe("StatsTabContent", () => {
 		total: 45_000,
 		contextWindow: 200_000,
 		percent: 22.5,
+		reserveTokens: 16_384,
+		safeAvailable: 138_616,
 		systemPrompt: 12_000,
 		systemTools: 8_000,
-		toolCalls: 10_000,
-		messages: 14_000,
+		tools: 10_000,
+		skills: 2_000,
+		messages: 12_000,
 		other: 1_000,
 	};
 
@@ -82,14 +85,19 @@ describe("StatsTabContent", () => {
 	} as any;
 
 	it("renders content without errors when breakdown is provided", () => {
-		const stats = new StatsTabContent(breakdown, dummyTheme);
+		const stats = new StatsTabContent(breakdown, dummyTheme, { name: "claude-opus-4-6" });
 		const lines = stats.renderContent(80, 28);
 		expect(lines.length).toBe(28);
 		const text = lines.join("\n");
-		expect(text).toContain("Total Usage");
-		expect(text).toContain("System Prompt");
+		expect(text).toContain("claude-opus-4-6");
+		expect(text).toContain("Estimated usage by category");
+		expect(text).toContain("System prompt");
+		expect(text).toContain("System tools");
+		expect(text).toContain("Tools");
+		expect(text).toContain("Skills");
 		expect(text).toContain("Messages");
 		expect(text).toContain("Available");
+		expect(text).toContain("Auto-compact buffer");
 	});
 
 	it("shows fallback message when no breakdown", () => {
@@ -105,6 +113,7 @@ describe("StatsTabContent", () => {
 		expect(footer).toContain("45k");
 		expect(footer).toContain("200k");
 		expect(footer).toContain("22.5%");
+		expect(footer).toContain("139k safe left");
 	});
 
 	it("handleInput always returns false (no key consumption)", () => {

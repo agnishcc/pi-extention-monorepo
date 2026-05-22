@@ -1,9 +1,9 @@
 /**
  * StatsTabContent — token distribution grid + category breakdown table.
  *
- * Adapts the visual dashboard from pi-context (github.com/ttttmr/pi-context)
- * for use inside TabbedOverlay. Shows a colored 10×5 block grid on the left and
- * a per-category token breakdown on the right.
+ * Shows a compact model/context summary, then a colored 10×5 grid beside an
+ * estimated per-category usage breakdown. The final grid segment is reserved for
+ * Pi's auto-compaction response buffer.
  */
 
 import type { Theme } from "@earendil-works/pi-coding-agent";
@@ -15,22 +15,105 @@ const GRID_WIDTH = 10;
 const GRID_HEIGHT = 5;
 const TOTAL_BLOCKS = GRID_WIDTH * GRID_HEIGHT; // 50 blocks = 2% each
 
+const ANSI_RESET = "\x1b[0m";
+const ANSI_BOLD = "\x1b[1m";
+
+function fg(hex: string, text: string): string {
+	const normalized = hex.replace("#", "");
+	const r = Number.parseInt(normalized.slice(0, 2), 16);
+	const g = Number.parseInt(normalized.slice(2, 4), 16);
+	const b = Number.parseInt(normalized.slice(4, 6), 16);
+	return `\x1b[38;2;${r};${g};${b}m${text}${ANSI_RESET}`;
+}
+
+function bold(text: string): string {
+	return `${ANSI_BOLD}${text}${ANSI_RESET}`;
+}
+
 export interface ContextTokenBreakdown {
 	total: number;
 	contextWindow: number;
 	percent: number;
+	reserveTokens: number;
+	safeAvailable: number;
 	systemPrompt: number;
 	systemTools: number;
-	toolCalls: number;
+	tools: number;
+	skills: number;
 	messages: number;
 	other: number;
 }
 
-interface Category {
-	label: string;
-	value: number;
-	color: string;
+export interface StatsModelInfo {
+	name: string;
+	contextWindow?: number;
 }
+
+interface Category {
+	key: keyof Pick<
+		ContextTokenBreakdown,
+		"systemPrompt" | "systemTools" | "tools" | "skills" | "messages" | "safeAvailable" | "reserveTokens"
+	>;
+	label: string;
+	icon: string;
+	fallbackIcon: string;
+	value: number;
+	hex: string;
+	block: string;
+	includeInGrid: boolean;
+}
+
+const CATEGORY_META = {
+	systemPrompt: {
+		label: "System prompt",
+		icon: "󰈙",
+		fallbackIcon: "●",
+		hex: "#A78BFA",
+		block: "󰈙",
+	},
+	systemTools: {
+		label: "System tools",
+		icon: "󰒓",
+		fallbackIcon: "◆",
+		hex: "#22D3EE",
+		block: "󰒓",
+	},
+	tools: {
+		label: "Tools",
+		icon: "󰐥",
+		fallbackIcon: "▲",
+		hex: "#34D399",
+		block: "󰐥",
+	},
+	skills: {
+		label: "Skills",
+		icon: "󰌵",
+		fallbackIcon: "✦",
+		hex: "#FBBF24",
+		block: "󰌵",
+	},
+	messages: {
+		label: "Messages",
+		icon: "󰍩",
+		fallbackIcon: "■",
+		hex: "#60A5FA",
+		block: "󰍩",
+	},
+	safeAvailable: {
+		label: "Available",
+		icon: "󰋙",
+		fallbackIcon: "□",
+		hex: "#6B7280",
+		block: "󰋙",
+	},
+	reserveTokens: {
+		label: "Auto-compact buffer",
+		icon: "󰅐",
+		fallbackIcon: "▨",
+		hex: "#FB923C",
+		block: "󰅐",
+	},
+} as const;
 
 export class StatsTabContent implements TabContent {
 	readonly name = "Stats";
@@ -39,6 +122,7 @@ export class StatsTabContent implements TabContent {
 	constructor(
 		private breakdown: ContextTokenBreakdown | null,
 		private theme: Theme,
+		private modelInfo?: StatsModelInfo,
 	) {}
 
 	/** Stats view has no interactive search bar — always use border separator. */
@@ -48,8 +132,8 @@ export class StatsTabContent implements TabContent {
 
 	getFooterLeft(): string {
 		if (!this.breakdown) return "";
-		const { total, contextWindow, percent } = this.breakdown;
-		return `${formatTokens(total)} / ${formatTokens(contextWindow)} (${percent.toFixed(1)}%)`;
+		const { total, contextWindow, percent, safeAvailable } = this.breakdown;
+		return `${formatTokens(total)} / ${formatTokens(contextWindow)} (${percent.toFixed(1)}%) · ${formatTokens(safeAvailable)} safe left`;
 	}
 
 	/** Stats view has no keyboard interactions. */
@@ -72,103 +156,112 @@ export class StatsTabContent implements TabContent {
 			return lines;
 		}
 
-		const { total, contextWindow, percent, systemPrompt, systemTools, toolCalls, messages, other } = this.breakdown;
+		const { total, contextWindow, percent, reserveTokens, safeAvailable } = this.breakdown;
+		const modelName = this.modelInfo?.name ?? "unknown model";
+		const safeLeftText =
+			safeAvailable > 0 ? `${formatTokens(safeAvailable)} safe left` : "auto-compact threshold reached";
 
-		const categories: Category[] = [
-			{ label: "System Prompt", value: systemPrompt, color: "muted" },
-			{ label: "System Tools", value: systemTools, color: "dim" },
-			{ label: "Tool Calls", value: toolCalls, color: "success" },
-			{ label: "Messages", value: messages, color: "accent" },
+		const categories = this.getCategories();
+		const gridLines = this.renderGrid(categories);
+		const breakdownLines = this.renderBreakdown(categories);
+
+		const lines: string[] = [
+			`  ${bold(`${modelName} · ${formatTokens(total)}/${formatTokens(contextWindow)} tokens (${percent.toFixed(1)}%)`)} ${th.fg("dim", `· ${safeLeftText}`)}`,
+			"",
+			"",
+			`  ${th.fg("dim", "Estimated usage by category")}`,
+			"",
 		];
 
-		if (other > 10) {
-			categories.push({ label: "Other", value: other, color: "dim" });
-		}
-
-		const available = Math.max(0, contextWindow - total);
-
-		// ── Build grid blocks ────────────────────────────────────────────────────
-		const blocks: { color: string; filled: boolean }[] = [];
-		for (const cat of categories) {
-			let count = Math.round((cat.value / contextWindow) * TOTAL_BLOCKS);
-			if (count === 0 && cat.value > 0) count = 1;
-			for (let i = 0; i < count && blocks.length < TOTAL_BLOCKS; i++) {
-				blocks.push({ color: cat.color, filled: true });
-			}
-		}
-		while (blocks.length < TOTAL_BLOCKS) {
-			blocks.push({ color: "borderMuted", filled: false });
-		}
-
-		// ── Render grid rows ─────────────────────────────────────────────────────
-		const gridLines: string[] = [];
-		for (let r = 0; r < GRID_HEIGHT; r++) {
-			let row = "";
-			for (let c = 0; c < GRID_WIDTH; c++) {
-				const b = blocks[r * GRID_WIDTH + c]!;
-				row += th.fg(b.color as Parameters<typeof th.fg>[0], b.filled ? "■" : "□");
-				if (c < GRID_WIDTH - 1) row += " ";
-			}
-			gridLines.push(row);
-		}
-
-		// ── Build legend ─────────────────────────────────────────────────────────
-		const LABEL_W = 14;
-		const TOKEN_W = 7;
-
-		const legendLines: string[] = [];
-
-		// Total usage line (bold, no icon)
-		legendLines.push(
-			`  ${th.bold(th.fg("text", "Total Usage".padEnd(LABEL_W + 2)))} ` +
-				`${th.fg("accent", formatTokens(total).padStart(TOKEN_W))} ` +
-				`${th.fg("dim", `(${percent.toFixed(1).padStart(5)}%)`)}`,
-		);
-		legendLines.push(""); // blank separator before categories
-
-		// Per-category lines
-		for (const cat of categories) {
-			const pct = ((cat.value / contextWindow) * 100).toFixed(1);
-			legendLines.push(
-				`${th.fg(cat.color as Parameters<typeof th.fg>[0], "■")} ` +
-					`${th.fg("text", cat.label.padEnd(LABEL_W))} ` +
-					`${th.fg("accent", formatTokens(cat.value).padStart(TOKEN_W))} ` +
-					`${th.fg("dim", `(${pct.padStart(5)}%)`)}`,
-			);
-		}
-
-		// Available line
-		const availPct = ((available / contextWindow) * 100).toFixed(1);
-		legendLines.push(
-			`${th.fg("borderMuted" as Parameters<typeof th.fg>[0], "□")} ` +
-				`${th.fg("dim", "Available".padEnd(LABEL_W))} ` +
-				`${th.fg("dim", formatTokens(available).padStart(TOKEN_W))} ` +
-				`${th.fg("dim", `(${availPct.padStart(5)}%)`)}`,
-		);
-
-		// ── Combine grid + legend side by side ───────────────────────────────────
-		// Grid visible width: GRID_WIDTH * 2 - 1 (each "■ " or "□ " = 2, minus trailing space)
 		const GRID_VIS_W = GRID_WIDTH * 2 - 1;
-		const maxRows = Math.max(gridLines.length, legendLines.length);
-
-		const combined: string[] = [];
-		combined.push(""); // top padding
-
+		const maxRows = Math.max(gridLines.length, breakdownLines.length);
 		for (let i = 0; i < maxRows; i++) {
 			const leftRaw = gridLines[i] ?? "";
 			const leftVisW = visibleWidth(leftRaw);
 			const pad = " ".repeat(Math.max(0, GRID_VIS_W - leftVisW));
-			const right = legendLines[i] ?? "";
-			combined.push(`    ${leftRaw}${pad}    ${right}`);
+			const right = breakdownLines[i] ?? "";
+			lines.push(`    ${leftRaw}${pad}    ${right}`);
 		}
 
-		combined.push(""); // bottom padding
-
-		// Fill or truncate to content height
-		const result: string[] = [];
-		for (let i = 0; i < height; i++) {
-			result.push(combined[i] ?? "");
+		if (safeAvailable <= 0) {
+			lines.push("");
+			lines.push(`  ${fg(CATEGORY_META.reserveTokens.hex, "Auto-compact buffer is being used")}`);
+		} else {
+			lines.push("");
+			lines.push(
+				`  ${th.fg("dim", `Auto-compact starts after ${formatTokens(contextWindow - reserveTokens)} tokens`)}`,
+			);
 		}
-		return result;
+
+		while (lines.length < height) lines.push("");
+		return lines.slice(0, height);
+	}
+
+	private getCategories(): Category[] {
+		const b = this.breakdown!;
+		return [
+			this.category("systemPrompt", b.systemPrompt, true),
+			this.category("systemTools", b.systemTools, true),
+			this.category("tools", b.tools, true),
+			this.category("skills", b.skills, true),
+			this.category("messages", b.messages + b.other, true),
+			this.category("safeAvailable", b.safeAvailable, true),
+			this.category("reserveTokens", b.reserveTokens, true),
+		];
+	}
+
+	private category(key: Category["key"], value: number, includeInGrid: boolean): Category {
+		const meta = CATEGORY_META[key];
+		return { key, value, includeInGrid, ...meta };
+	}
+
+	private renderGrid(categories: Category[]): string[] {
+		const blocks: string[] = [];
+		const { contextWindow, reserveTokens } = this.breakdown!;
+		const reserveBlockCount = Math.max(1, Math.round((reserveTokens / contextWindow) * TOTAL_BLOCKS));
+		const safeBlockCount = Math.max(0, TOTAL_BLOCKS - reserveBlockCount);
+		const safeWindow = Math.max(1, contextWindow - reserveTokens);
+		const safeCategories = categories.filter((cat) => cat.key !== "reserveTokens");
+
+		for (const cat of safeCategories) {
+			let count = Math.round((cat.value / safeWindow) * safeBlockCount);
+			if (count === 0 && cat.value > 0) count = 1;
+			for (let j = 0; j < count && blocks.length < safeBlockCount; j++) {
+				blocks.push(fg(cat.hex, cat.block));
+			}
+		}
+
+		while (blocks.length < safeBlockCount) {
+			blocks.push(fg(CATEGORY_META.safeAvailable.hex, CATEGORY_META.safeAvailable.block));
+		}
+
+		for (let i = 0; i < reserveBlockCount && blocks.length < TOTAL_BLOCKS; i++) {
+			blocks.push(fg(CATEGORY_META.reserveTokens.hex, CATEGORY_META.reserveTokens.block));
+		}
+
+		const gridLines: string[] = [];
+		for (let r = 0; r < GRID_HEIGHT; r++) {
+			let row = "";
+			for (let c = 0; c < GRID_WIDTH; c++) {
+				row += blocks[r * GRID_WIDTH + c] ?? fg(CATEGORY_META.safeAvailable.hex, CATEGORY_META.safeAvailable.block);
+				if (c < GRID_WIDTH - 1) row += " ";
+			}
+			gridLines.push(row);
+		}
+		return gridLines;
+	}
+
+	private renderBreakdown(categories: Category[]): string[] {
+		const LABEL_W = 21;
+		const TOKEN_W = 7;
+
+		return categories.map((cat) => {
+			const pct = this.breakdown!.contextWindow > 0 ? (cat.value / this.breakdown!.contextWindow) * 100 : 0;
+			const icon = fg(cat.hex, cat.icon);
+			const label = fg(cat.hex, cat.label.padEnd(LABEL_W));
+			const tokens = fg(cat.hex, formatTokens(cat.value).padStart(TOKEN_W));
+			const percent = this.theme.fg("dim", `(${pct.toFixed(1).padStart(5)}%)`);
+			return `${icon} ${label} ${tokens} ${percent}`;
+		});
 	}
 }
