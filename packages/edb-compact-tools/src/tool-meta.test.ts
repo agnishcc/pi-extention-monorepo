@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callLabel, isSkillPath, purple, summaryFor, toolColor, toolIcon } from "./tool-meta.js";
+import { callLabel, isSkillPath, purple, summaryFor, toolColor, toolDisplayName, toolIcon } from "./tool-meta.js";
 
 describe("isSkillPath", () => {
 	it("detects .agents/skills paths", () => {
@@ -84,6 +84,22 @@ describe("toolIcon", () => {
 	});
 });
 
+describe("toolDisplayName", () => {
+	it("returns polished built-in display names", () => {
+		expect(toolDisplayName("bash")).toBe("Run");
+		expect(toolDisplayName("read")).toBe("Read");
+		expect(toolDisplayName("grep")).toBe("Search");
+		expect(toolDisplayName("find")).toBe("Find");
+		expect(toolDisplayName("ls")).toBe("List");
+		expect(toolDisplayName("edit")).toBe("Edit");
+		expect(toolDisplayName("write", { path: "definitely-new-file-for-display-name.ts" })).toBe("Create");
+	});
+
+	it("falls back to the raw name for unknown tools", () => {
+		expect(toolDisplayName("unknown_tool")).toBe("unknown_tool");
+	});
+});
+
 describe("callLabel", () => {
 	it("returns clipped command for bash", () => {
 		expect(callLabel("bash", { command: "ls -la" })).toBe("ls -la");
@@ -96,12 +112,12 @@ describe("callLabel", () => {
 		expect(result.endsWith("…")).toBe(true);
 	});
 
-	it("returns clipped path for read", () => {
-		expect(callLabel("read", { path: "/tmp/foo.ts" })).toBe("/tmp/foo.ts");
+	it("returns shortened path for read", () => {
+		expect(callLabel("read", { path: `${process.cwd()}/packages/foo.ts` })).toBe("packages/foo.ts");
 	});
 
-	it("formats grep with path", () => {
-		expect(callLabel("grep", { pattern: "TODO", path: "/src" })).toBe("TODO in /src");
+	it("formats grep with shortened path", () => {
+		expect(callLabel("grep", { pattern: "TODO", path: `${process.cwd()}/src` })).toBe("TODO in src");
 	});
 
 	it("returns default for grep without path", () => {

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { clip, lineCount, oneLine, outputWasTruncated, previewLines, textContent } from "./text.js";
+import {
+	cleanToolOutputText,
+	clip,
+	lineCount,
+	oneLine,
+	outputWasTruncated,
+	previewLines,
+	textContent,
+} from "./text.js";
 
 describe("oneLine", () => {
 	it("collapses whitespace", () => {
@@ -97,6 +105,12 @@ describe("outputWasTruncated", () => {
 
 	it("returns false for clean output", () => {
 		expect(outputWasTruncated("hello world")).toBe(false);
+	});
+});
+
+describe("cleanToolOutputText", () => {
+	it("removes synthetic exit-code lines from tool output", () => {
+		expect(cleanToolOutputText("hello\nExit code: 0\n")).toBe("hello");
 	});
 });
 
