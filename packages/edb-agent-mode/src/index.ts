@@ -16,7 +16,9 @@
  *   /mode off        — clear the active mode
  *   /mode status     — show current mode details without opening picker
  *
- * Footer: shows active mode name in footer status bar.
+ * Keyboard:
+ *   Ctrl+Shift+A     — cycle through agent modes (toggle)
+ * Footer: active mode name shown in footer line 2 (right side, after thinking label).
  * System prompt: active mode's body is appended (or replaces) on each turn.
  * Model: if mode defines a model, it is set when mode is activated.
  */
@@ -26,6 +28,8 @@ import { basename, join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 import { type ModelRegistry, resolveModel } from "./model-resolver.js";
+
+const ENTRY_TYPE = "agent-mode:active";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,8 +47,6 @@ interface ModeConfig {
 
 let activeMode: ModeConfig | null = null;
 let currentCwd = process.cwd();
-
-const STATUS_KEY = "agent-mode";
 
 // ── Mode discovery ────────────────────────────────────────────────────────────
 
@@ -88,21 +90,19 @@ function loadFromDir(dir: string, modes: Map<string, ModeConfig>, source: "globa
 	}
 }
 
-// ── Status bar ────────────────────────────────────────────────────────────────
-
-function updateStatus(ctx: ExtensionCommandContext | any): void {
-	if (!activeMode) {
-		ctx.ui.setStatus(STATUS_KEY, undefined);
-		return;
-	}
-	const theme = ctx.ui.theme;
-	const modelSuffix = activeMode.model ? ` · ${getModelShortName(activeMode.model)}` : "";
-	ctx.ui.setStatus(STATUS_KEY, theme.fg("accent", `◈ ${activeMode.name}${modelSuffix}`));
-}
+// ── Session persistence ────────────────────────────────────────────────────────
 
 function getModelShortName(model: string): string {
 	const name = model.includes("/") ? model.split("/").pop()! : model;
 	return name.replace(/-\d{8}$/, "");
+}
+
+function persistMode(pi: ExtensionAPI): void {
+	if (activeMode) {
+		pi.appendEntry(ENTRY_TYPE, { mode: activeMode.name, source: activeMode.source });
+	} else {
+		pi.appendEntry(ENTRY_TYPE, { mode: null, source: null });
+	}
 }
 
 // ── Model activation ──────────────────────────────────────────────────────────
@@ -118,6 +118,47 @@ async function applyModeModel(pi: ExtensionAPI, mode: ModeConfig, ctx: Extension
 	const ok = await pi.setModel(resolved);
 	if (!ok) {
 		ctx.ui.notify(`No API key available for model: ${mode.model}`, "warning");
+	}
+}
+
+// ── Cycle logic ────────────────────────────────────────────────────────────────
+
+async function cycleMode(pi: ExtensionAPI, ctx: any): Promise<void> {
+	const modes = loadModes(currentCwd);
+	const modeList = [...modes.values()];
+	if (modeList.length === 0) {
+		ctx.ui.notify("No modes defined. Create .md files in ~/.pi/agent/modes/", "info");
+		return;
+	}
+
+	// Note: we don't wait for idle here (shortcuts should be responsive)
+	// The mode change takes effect on the next agent turn
+
+	// Find current mode index
+	const current = activeMode;
+	const currentIndex = current ? modeList.findIndex((m) => m.name === current.name) : -1;
+
+	// Cycle: active mode → next mode → off (then wraps to first mode)
+	if (currentIndex === -1) {
+		// No mode active — activate first mode
+		const first = modeList[0]!;
+		activeMode = first;
+		persistMode(pi);
+		applyModeModel(pi, first, ctx).catch(() => {});
+		ctx.ui.notify(`Mode: ${first.name}`, "info");
+	} else if (currentIndex < modeList.length - 1) {
+		// Cycle to next mode
+		const nextMode = modeList[currentIndex + 1]!;
+		activeMode = nextMode;
+		persistMode(pi);
+		applyModeModel(pi, nextMode, ctx).catch(() => {});
+		ctx.ui.notify(`Mode: ${nextMode.name}`, "info");
+	} else {
+		// After last mode — turn off
+		const prevName = activeMode!.name;
+		activeMode = null;
+		persistMode(pi);
+		ctx.ui.notify(`Mode cleared (was: ${prevName})`, "info");
 	}
 }
 
@@ -139,6 +180,14 @@ export default function agentModeExtension(pi: ExtensionAPI): void {
 		return {
 			systemPrompt: `${event.systemPrompt}\n\n<agent_mode name="${activeMode.name}">\n${activeMode.systemPrompt}\n</agent_mode>`,
 		};
+	});
+
+	// ── Keyboard shortcut: Ctrl+Shift+A ─────────────────────────────────────
+	pi.registerShortcut("ctrl+shift+a", {
+		description: "Cycle through agent modes",
+		handler: async (ctx: any) => {
+			await cycleMode(pi, ctx);
+		},
 	});
 
 	pi.registerCommand("mode", {
@@ -170,7 +219,7 @@ export default function agentModeExtension(pi: ExtensionAPI): void {
 				if (activeMode) {
 					const prev = activeMode.name;
 					activeMode = null;
-					updateStatus(ctx);
+					persistMode(pi);
 					ctx.ui.notify(`Mode cleared (was: ${prev})`, "info");
 				} else {
 					ctx.ui.notify("No mode is active.", "info");
@@ -218,7 +267,7 @@ export default function agentModeExtension(pi: ExtensionAPI): void {
 
 			if (choice === CLEAR_OPTION) {
 				activeMode = null;
-				updateStatus(ctx);
+				persistMode(pi);
 				ctx.ui.notify("Mode cleared.", "info");
 				return;
 			}
@@ -229,7 +278,7 @@ export default function agentModeExtension(pi: ExtensionAPI): void {
 			if (!selected) return;
 
 			activeMode = selected;
-			updateStatus(ctx);
+			persistMode(pi);
 
 			// Apply model if specified
 			await applyModeModel(pi, selected, ctx);

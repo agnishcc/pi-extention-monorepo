@@ -64,10 +64,14 @@ export class FileTaskStore {
 	private lockPath: string | undefined;
 
 	/** The file path this store persists to. Undefined for in-memory stores. */
-	get path(): string | undefined { return this.filePath; }
+	get path(): string | undefined {
+		return this.filePath;
+	}
 
 	/** Force-reload from disk (useful when another process may have written to the store). */
-	reload(): void { this.load(); }
+	reload(): void {
+		this.load();
+	}
 
 	private nextId = 1;
 	private tasks = new Map<string, Task>();
@@ -273,7 +277,7 @@ export class FileTaskStore {
 				if (fields.status === "in_progress" && task.blockedByGroup && !this.isGroupComplete(task.blockedByGroup)) {
 					warnings.push(
 						`Cannot set status to in_progress: task is waiting for group [${task.blockedByGroup}] which is not yet complete. ` +
-						`Complete all tasks in that group first, or remove blockedByGroup from this task.`
+							`Complete all tasks in that group first, or remove blockedByGroup from this task.`,
 					);
 					// Return early — do not apply any changes
 					return { task, changedFields: [], warnings };

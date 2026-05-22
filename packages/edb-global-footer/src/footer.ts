@@ -19,6 +19,28 @@ import type { GitStatus } from "./types";
 //   - Keys for extensions whose status you want to hide
 const STATUS_KEY_BLACKLIST = new Set<string>(["extmgr", "sm"]);
 
+// ── Agent mode helper ─────────────────────────────────────────────────────────
+
+const AGENT_MODE_ENTRY_TYPE = "agent-mode:active";
+
+function getActiveAgentMode(entries: any[]): string | null {
+	// Scan from most recent to oldest
+	for (let i = entries.length - 1; i >= 0; i--) {
+		const entry = entries[i];
+		if (entry.type === "custom" && entry.customType === AGENT_MODE_ENTRY_TYPE) {
+			const mode = entry.data?.mode;
+			if (mode === null) {
+				// Clear marker — stop scanning, return no mode
+				return null;
+			}
+			if (typeof mode === "string" && mode.length > 0) {
+				return mode;
+			}
+		}
+	}
+	return null;
+}
+
 // ── Live state types ───────────────────────────────────────────────────────────
 
 interface TpsState {
@@ -168,6 +190,12 @@ export function createFooterRenderer(
 							const thinkLabel = hasNerdFonts ? withIcon(iconThink, thinking) : thinking;
 							modelText += `${sep}${theme.fg("dim", thinkLabel)}`;
 						}
+					}
+
+					// Append active agent mode after thinking label
+					const agentMode = getActiveAgentMode(ctx.sessionManager.getEntries());
+					if (agentMode) {
+						modelText += `${sep}${theme.fg("muted", `◈ ${agentMode}`)}`;
 					}
 					rightPartsLine2.push(modelText);
 				}
