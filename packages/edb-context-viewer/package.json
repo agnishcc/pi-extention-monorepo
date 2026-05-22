@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-context-viewer",
-	"version": "0.12.0",
+	"version": "0.13.0",
 	"description": "Pi extension: inspect the system prompt and full LLM context in scrollable overlay popups",
 	"keywords": [
 		"pi-package",
