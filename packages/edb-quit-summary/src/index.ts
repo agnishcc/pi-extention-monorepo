@@ -5,9 +5,8 @@
  * Uses process.on('exit') to print after the TUI alternate screen buffer
  * is restored, so the summary is visible in the user's terminal.
  *
- * Layout: raccoon ASCII art on the left, stats on the right.
- * Dynamically scales to terminal width — hides art on narrow terminals,
- * shrinks bars to fit available space.
+ * Layout: understated title, raccoon ASCII art on the left, stats on the right.
+ * Dynamically scales to terminal width — hides art on narrow terminals.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -33,23 +32,16 @@ const m = (t: string) => `${MAGENTA}${t}${RESET}`;
 const bl = (t: string) => `${BLUE}${t}${RESET}`;
 const w = (t: string) => `${WHITE}${t}${RESET}`;
 
-// ── Raccoon ────────────────────────────────────────────────────────────────────
+// ── Raccoon mark ───────────────────────────────────────────────────────────────
 //
-// 9 lines. Each entry has:
+// Small, understated raccoon mask. Each entry has:
 //   text    — plain text (used for width measurement)
 //   colored — ANSI-coloured version
-// All text fields are exactly 12 visible chars.
 
 const RACCOON: { text: string; colored: string }[] = [
-	{ text: "   /\\  /\\   ", colored: `   ${d("/\\")}  ${d("/\\")}   ` },
-	{ text: "  (  oo  )  ", colored: `  ( ${b(" oo ")} )  ` },
-	{ text: " ( ,-___-, )", colored: ` ( ,${d("_____")}, )` },
-	{ text: "  \\_______/ ", colored: `  ${d("\\______/")}  ` },
-	{ text: "  /       \\ ", colored: `  /       \\  ` },
-	{ text: " ( | | | | )", colored: ` ( ${d("| | | |")} )` },
-	{ text: "  \\ ===== / ", colored: `  \\ ${d("=====")} /  ` },
-	{ text: "   \\     /  ", colored: `   \\     /   ` },
-	{ text: "    `---'   ", colored: `    \`---'    ` },
+	{ text: "  /\\_/\\  ", colored: `  ${d("/\\_/\\")}  ` },
+	{ text: " < ▓ ▓ > ", colored: ` < ${d("▓")} ${d("▓")} > ` },
+	{ text: "   \\___/  ", colored: `   ${d("\\___/")}  ` },
 ];
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
@@ -92,7 +84,32 @@ function padTo(s: string, width: number): string {
 /** Truncate a plain string to a max length, appending "…" if truncated. */
 function truncate(s: string, max: number): string {
 	if (s.length <= max) return s;
-	return s.slice(0, max - 1) + "…";
+	return `${s.slice(0, max - 1)}…`;
+}
+
+/** Truncate an ANSI string to a max visible length, preserving escape codes. */
+function truncateAnsi(s: string, max: number): string {
+	if (max <= 0) return "";
+	if (visLen(s) <= max) return s;
+
+	let out = "";
+	let visible = 0;
+	const target = Math.max(0, max - 1);
+
+	for (let i = 0; i < s.length && visible < target; i++) {
+		if (s[i] === "\x1b") {
+			const end = s.indexOf("m", i);
+			if (end === -1) break;
+			out += s.slice(i, end + 1);
+			i = end;
+			continue;
+		}
+
+		out += s[i];
+		visible++;
+	}
+
+	return `${out}${RESET}…`;
 }
 
 // ── Stats collection ───────────────────────────────────────────────────────────
@@ -209,61 +226,60 @@ function buildStatRows(s: SessionStats): StatRow[] {
 	const totalTok = s.inputTokens + s.outputTokens + s.cacheRead + s.cacheWrite;
 
 	if (s.sessionName) {
-		rows.push({ type: "info", label: c("session"), value: b(truncate(s.sessionName, 40)) });
+		rows.push({ type: "info", label: d("Session"), value: b(truncate(s.sessionName, 42)) });
 	}
-	rows.push({ type: "info", label: c("duration"), value: w(formatDuration(duration)) });
+	rows.push({ type: "info", label: d("Duration"), value: w(formatDuration(duration)) });
 	if (s.model) {
 		const modelStr = s.provider
-			? `${d(truncate(s.provider, 12) + "/")}${truncate(s.model, 24)}`
-			: truncate(s.model, 28);
-		rows.push({ type: "info", label: c("model"), value: modelStr });
+			? `${d(`${truncate(s.provider, 12)}/`)}${truncate(s.model, 28)}`
+			: truncate(s.model, 34);
+		rows.push({ type: "info", label: d("Model"), value: modelStr });
 	}
 
 	rows.push({ type: "spacer", label: "", value: "" });
-
 	rows.push({
 		type: "info",
-		label: c("messages"),
-		value: `${g(String(s.userMessages))} user  ${bl(String(s.assistantMessages))} asst`,
+		label: d("Messages"),
+		value: `${g(String(s.userMessages))} user ${d("/")} ${bl(String(s.assistantMessages))} assistant`,
 	});
 
 	if (s.toolCalls > 0) {
 		const topTools = Array.from(s.toolCounts.entries())
 			.sort((a, b) => b[1] - a[1])
-			.slice(0, 3)
-			.map(([n, cnt]) => `${n}${d(" " + String(cnt) + "\u00d7")}`)
-			.join("  ");
+			.slice(0, 4)
+			.map(([name, count]) => `${truncate(name, 12)} ${d(`${count}×`)}`)
+			.join(d("  ·  "));
 		rows.push({
 			type: "info",
-			label: c("tools"),
-			value: `${b(String(s.toolCalls))}  ${topTools}`,
+			label: d("Tools"),
+			value: `${b(String(s.toolCalls))}${topTools ? d("  ·  ") + topTools : ""}`,
 		});
 	}
 
-	rows.push({ type: "spacer", label: "", value: "" });
-
 	if (totalTok > 0) {
-		rows.push({ type: "info", label: c("input"), value: y(formatTokens(s.inputTokens)) });
-		rows.push({ type: "info", label: c("output"), value: g(formatTokens(s.outputTokens)) });
-		if (s.cacheRead > 0) {
-			rows.push({ type: "info", label: c("c.read"), value: bl(formatTokens(s.cacheRead)) });
+		rows.push({ type: "spacer", label: "", value: "" });
+		rows.push({
+			type: "info",
+			label: d("Tokens"),
+			value: `${b(formatTokens(totalTok))} ${d("total")}  ${y(formatTokens(s.inputTokens))} ${d("in")}  ${g(formatTokens(s.outputTokens))} ${d("out")}`,
+		});
+		if (s.cacheRead > 0 || s.cacheWrite > 0) {
+			rows.push({
+				type: "info",
+				label: d("Cache"),
+				value: `${bl(formatTokens(s.cacheRead))} ${d("read")}  ${d(formatTokens(s.cacheWrite))} ${d("write")}`,
+			});
 		}
-		if (s.cacheWrite > 0) {
-			rows.push({ type: "info", label: c("c.write"), value: d(formatTokens(s.cacheWrite)) });
-		}
-		rows.push({ type: "info", label: c("total"), value: b(formatTokens(totalTok)) });
 	}
 
 	if (s.totalCost > 0) {
-		rows.push({ type: "spacer", label: "", value: "" });
 		const costCol = s.totalCost < 1 ? g : s.totalCost < 5 ? y : m;
-		rows.push({ type: "info", label: c("cost"), value: b(costCol(formatCost(s.totalCost))) });
+		rows.push({ type: "info", label: d("Cost"), value: b(costCol(formatCost(s.totalCost))) });
 	}
 
-	// Resume command
 	if (s.sessionId) {
 		rows.push({ type: "spacer", label: "", value: "" });
-		rows.push({ type: "info", label: c("resume"), value: d(`pi --resume=${s.sessionId}`) });
+		rows.push({ type: "info", label: d("Resume"), value: d(`pi --resume=${s.sessionId}`) });
 	}
 
 	return rows;
@@ -273,63 +289,56 @@ function buildStatRows(s: SessionStats): StatRow[] {
 
 function render(stats: SessionStats): string {
 	const termWidth = process.stdout.columns || 80;
+	const margin = termWidth >= 72 ? "  " : "";
+	const availableWidth = Math.max(32, termWidth - visLen(margin) * 2);
 
-	// Raccoon art metrics
-	const artVisW = Math.max(...RACCOON.map((l) => visLen(l.text)));
-	const artGutter = 3;
-	const artTotal = artVisW + artGutter;
-
-	// Show art only when there's at least 48 chars remaining for stats
-	const showArt = termWidth >= artTotal + 48;
-
-	// Build rows
 	const rows = buildStatRows(stats);
-
-	const maxLabelW = Math.max(0, ...rows.filter((r) => r.type !== "spacer").map((r) => visLen(r.label)));
-
-	// Format each stat line: label (padded) + 2 spaces + value
-	const statLines: string[] = rows.map((row) => {
+	const maxLabelW = Math.max(0, ...rows.filter((row) => row.type !== "spacer").map((row) => visLen(row.label)));
+	const rawStatLines = rows.map((row) => {
 		if (row.type === "spacer") return "";
-		const lPad = padTo(row.label, maxLabelW);
-		return `${lPad}  ${row.value}`;
+		return `${padTo(row.label, maxLabelW)}  ${row.value}`;
 	});
 
-	// Max visible width of stat block
-	const maxStatVis = Math.max(0, ...statLines.map((l) => visLen(l)));
+	const artWidth = Math.max(...RACCOON.map((line) => visLen(line.text)));
+	const gapWidth = 4;
+	const minStatWidth = 32;
+	const artFits = availableWidth >= artWidth + gapWidth + minStatWidth;
+	const statWidth = artFits ? availableWidth - artWidth - gapWidth : availableWidth;
+	const statLines = rawStatLines.map((line) => truncateAnsi(line, statWidth));
 
-	// Final box dimensions
-	const contentW = showArt ? artTotal + maxStatVis : maxStatVis;
-	const boxInner = Math.min(contentW + 2, termWidth - 2);
-	const hLine = "─".repeat(boxInner);
+	const bodyWidth = artFits
+		? artWidth + gapWidth + Math.max(0, ...statLines.map((line) => visLen(line)))
+		: Math.max(0, ...statLines.map((line) => visLen(line)));
+	const title = `${b(c("Session Summary"))} ${d("/ quit")}`;
+	const ruleWidth = Math.min(availableWidth, Math.max(28, visLen(title), bodyWidth));
+	const rule = d("─".repeat(ruleWidth));
 
-	// Merge art + stat lines
-	const totalLines = Math.max(RACCOON.length, statLines.length);
-	const bodyLines: string[] = [];
+	const out: string[] = ["", `${margin}${title}`, `${margin}${rule}`];
+
+	if (!artFits) {
+		for (const line of statLines) {
+			out.push(line ? `${margin}${line}` : "");
+		}
+		out.push("");
+		return out.join("\n");
+	}
+
+	const artHeight = RACCOON.length;
+	const statHeight = statLines.length;
+	const totalLines = Math.max(artHeight, statHeight);
+	const artTop = Math.floor((totalLines - artHeight) / 2);
+	const statTop = Math.floor((totalLines - statHeight) / 2);
 
 	for (let i = 0; i < totalLines; i++) {
-		let line = "";
-
-		if (showArt) {
-			const artColored = i < RACCOON.length ? RACCOON[i]!.colored : "";
-			const artVisW_ = i < RACCOON.length ? visLen(RACCOON[i]!.text) : 0;
-			const gap = artTotal - artVisW_;
-			line += artColored + " ".repeat(Math.max(0, gap));
-		}
-
-		line += i < statLines.length ? statLines[i]! : "";
-		bodyLines.push(padTo(` ${line}`, boxInner));
+		const artIndex = i - artTop;
+		const statIndex = i - statTop;
+		const art = artIndex >= 0 && artIndex < RACCOON.length ? RACCOON[artIndex]!.colored : "";
+		const artPad = artWidth - (artIndex >= 0 && artIndex < RACCOON.length ? visLen(RACCOON[artIndex]!.text) : 0);
+		const stat = statIndex >= 0 && statIndex < statLines.length ? statLines[statIndex]! : "";
+		out.push(`${margin}${art}${" ".repeat(Math.max(0, artPad + gapWidth))}${stat}`);
 	}
 
-	// Output
-	const out: string[] = [];
 	out.push("");
-	out.push(d(`╭${hLine}╮`));
-	for (const bLine of bodyLines) {
-		out.push(`${d("│")}${bLine}${d("│")}`);
-	}
-	out.push(d(`╰${hLine}╯`));
-	out.push("");
-
 	return out.join("\n");
 }
 

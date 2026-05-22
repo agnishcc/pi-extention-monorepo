@@ -2,6 +2,13 @@
 
 All notable changes to `@agnishc/edb-quit-summary` will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- Redesigned output layout: compact single-box format with raccoon ASCII art
+- Added `truncateAnsi()` for proper ANSI-aware truncation of stat lines
+- Updated README with new output example
+
 ## [0.12.0] - 2026-05-22
 
 ### Added

@@ -2,37 +2,20 @@
 
 A [pi](https://pi.dev) extension that prints a session summary to your terminal when you quit pi.
 
-When you hit `/quit` (or Ctrl+C twice), pi exits and you'll see a formatted summary like:
+When you hit `/quit` (or Ctrl+C twice), pi exits and you'll see a compact summary like:
 
 ```
-  ── Session Summary ──
+  Session Summary / quit
+  ─────────────────────────────────────────────────────
+    /\_/\      Session   Refactor auth module
+   < ▓ ▓ >     Duration  23m 45s
+     \___/     Model     anthropic/claude-sonnet-4-5
 
-  Session:    Refactor auth module
-  Duration:   23m 45s
-  Model:      anthropic/claude-sonnet-4-5
+               Messages  8 user / 8 assistant
+               Tools     24 · edit 12× · bash 6× · read 4×
 
-  Messages:
-    User:       8
-    Assistant:  8
-    Tool calls: 24
-
-  Tools used:
-    edit           12×
-    bash            6×
-    read            4×
-    grep            2×
-
-  Tokens:
-    Input:        45.2k  ████████████░░░░
-    Output:       12.8k  ████░░░░░░░░░░░░
-    Cache read:   38.1k  ███████████░░░░░
-    Cache write:   5.3k
-    ────────────────────────────────────
-    Total:       101.4k
-
-  Cost:        $0.34
-
-  ─────────────────────────────
+               Tokens    101.4k total  45.2k in  12.8k out
+               Cost      $0.34
 ```
 
 ## How It Works
