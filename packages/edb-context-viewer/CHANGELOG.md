@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Renamed `/context-viewer` command → `/context`
+
 ## [0.12.0] - 2026-05-22
 
 ### Changed

@@ -5,7 +5,7 @@ Pi CLI extension for inspecting the full LLM context. A single command opens a t
 ## Command
 
 ```
-/context-viewer
+/context
 ```
 
 Opens a tabbed overlay with five views you can navigate using `Tab` / `Shift+Tab`.

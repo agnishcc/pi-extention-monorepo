@@ -150,7 +150,7 @@ export class StatsTabContent implements TabContent {
 			const lines: string[] = [
 				"",
 				`  ${th.fg("warning", "No context usage data available.")}`,
-				`  ${th.fg("dim", "Send a message first, then re-open /context-viewer.")}`,
+				`  ${th.fg("dim", "Send a message first, then re-open /context.")}`,
 			];
 			while (lines.length < height) lines.push("");
 			return lines;

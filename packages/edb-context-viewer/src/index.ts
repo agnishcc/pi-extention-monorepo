@@ -3,7 +3,7 @@
  *
  * Single command for inspecting the full LLM context in a tabbed overlay:
  *
- *   /context-viewer  — opens a tabbed overlay with:
+ *   /context  — opens a tabbed overlay with:
  *                       [Stats]  token distribution grid + category breakdown
  *                       [System] full system prompt (scrollable)
  *                       [Tools]  active tool definitions (scrollable)
@@ -312,7 +312,7 @@ const OVERLAY_OPTIONS = {
 // ── Extension ──────────────────────────────────────────────────────────────────
 
 export default function contextViewerExtension(pi: ExtensionAPI): void {
-	pi.registerCommand("context-viewer", {
+	pi.registerCommand("context", {
 		description: "Inspect context usage, system prompt, tools, messages, and full LLM context in a tabbed overlay",
 		handler: async (_args: string, ctx: ExtensionCommandContext) => {
 			if (!ctx.hasUI) return;
