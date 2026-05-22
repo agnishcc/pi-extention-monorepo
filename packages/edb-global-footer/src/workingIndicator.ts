@@ -455,6 +455,32 @@ function formatElapsed(ms: number): string {
 	return `${seconds}s`;
 }
 
+function stripAnsi(text: string): string {
+	return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+function isCompletionLine(line: string): boolean {
+	return /^✓ · .+ · \d/.test(stripAnsi(line).trim());
+}
+
+function stripCompletionLine(text: string): string {
+	return text
+		.split(/\r?\n/)
+		.filter((line) => !isCompletionLine(line))
+		.join("\n");
+}
+
+function appendCompletionToFinalAssistantMessage(message: any, completionLine: string): void {
+	if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return;
+	const textBlocks = message.content.filter(
+		(block: any) => block?.type === "text" && typeof block.text === "string" && block.text.trim(),
+	);
+	const lastText = textBlocks[textBlocks.length - 1];
+	if (!lastText) return;
+	const text = stripCompletionLine(lastText.text);
+	lastText.text = `${text.trimEnd()}\n\n${completionLine}`;
+}
+
 // ── Shimmer ───────────────────────────────────────────────────────────────────
 
 const SHIMMER_BAND_WIDTH = 4;
@@ -629,26 +655,18 @@ export function installWorkingIndicator(pi: ExtensionAPI): WorkingIndicatorRef {
 
 	// ── Completion ────────────────────────────────────────────────────────────
 
-	function showCompletion(totalMs: number): void {
-		if (!ctx) return;
+	function completionLine(totalMs: number): string {
+		// This string is persisted into assistant message content, so it must stay plain text.
+		// ANSI escapes inside persisted markdown can render as literal control-code fragments.
+		return `✓ · ${randomItem(COMPLETION_VERBS)} · ${formatElapsed(totalMs)}`;
+	}
+
+	function showCompletion(_totalMs: number): void {
+		// Completion is now persisted into the final assistant message on message_end.
+		// Do not use the old temporary wi-completion widget.
 		cancelCompletionTimer();
-
-		const theme = ctx.ui.theme;
-		const check = theme.fg("success", "✓");
-		const verb = theme.fg("accent", randomItem(COMPLETION_VERBS));
-		const time = theme.fg("dim", formatElapsed(totalMs));
-		const sep = theme.fg("dim", " · ");
-		const completionLine = `${check}${sep}${verb}${sep}${time}`;
-
-		// The Loader is torn down by pi on agent_end, so setWorkingMessage is a no-op.
-		// Use setWidget to briefly show the completion state above the editor.
-		ctx.ui.setWidget("wi-completion", [completionLine]);
-
-		completionTimer = setTimeout(() => {
-			completionTimer = null;
-			ref.currentLine = undefined;
-			ctx?.ui.setWidget("wi-completion", undefined);
-		}, 3000);
+		ref.currentLine = undefined;
+		ctx?.ui.setWidget("wi-completion", undefined);
 	}
 
 	// ── Spinner frames (apply to pi's working indicator widget) ───────────────
@@ -685,6 +703,15 @@ export function installWorkingIndicator(pi: ExtensionAPI): WorkingIndicatorRef {
 		applySpinnerFrames();
 		render();
 		startTimers();
+	});
+
+	pi.on("message_end", async (event: any, messageCtx) => {
+		ctx = messageCtx;
+		const message = event?.message;
+		if (message?.role !== "assistant") return;
+		if (message.stopReason === "toolUse") return;
+		const totalMs = startedAt > 0 ? Date.now() - startedAt : 0;
+		appendCompletionToFinalAssistantMessage(message, completionLine(totalMs));
 	});
 
 	pi.on("tool_execution_start", (event) => {

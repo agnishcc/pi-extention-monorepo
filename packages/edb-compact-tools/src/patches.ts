@@ -4,19 +4,14 @@ import {
 	ToolExecutionComponent,
 	UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
+import { Markdown } from "@earendil-works/pi-tui";
 import {
-	ASSISTANT_MESSAGE_MARKER_SYMBOL,
 	ASSISTANT_MESSAGE_PATCH_SYMBOL,
 	TOOL_EXECUTION_PATCH_SYMBOL,
 	USER_MESSAGE_MARKER_SYMBOL,
 	USER_MESSAGE_PATCH_SYMBOL,
 } from "./constants.js";
-import {
-	frameAssistantMessage,
-	frameUserMessage,
-	randomAssistantMessageMarker,
-	randomUserMessageMarker,
-} from "./message-frame.js";
+import { DottedParagraph, frameUserMessage, randomUserMessageMarker, ThinkingParagraph } from "./message-frame.js";
 import { renderCall, renderResult } from "./tool-renderer.js";
 import type { BuiltinTool, BuiltinToolName, CompactTheme } from "./types.js";
 
@@ -104,23 +99,27 @@ export function installMessageRenderers(pi: ExtensionAPI): void {
 	if (
 		assistantProto &&
 		!assistantProto[ASSISTANT_MESSAGE_PATCH_SYMBOL] &&
-		typeof assistantProto.render === "function"
+		typeof assistantProto.updateContent === "function"
 	) {
-		const originalRender = assistantProto.render as (width: number) => string[];
-		assistantProto.render = function compactAssistantMessageRender(this: any, width: number): string[] {
-			const rendered = originalRender.call(this, Math.max(1, width - 3));
-			if (this?.hasToolCalls || rendered.length === 0) return rendered;
-			const frameWidth = Math.max(1, width - 1);
-			if (!this[ASSISTANT_MESSAGE_MARKER_SYMBOL])
-				this[ASSISTANT_MESSAGE_MARKER_SYMBOL] = randomAssistantMessageMarker();
-			return frameAssistantMessage(
-				rendered,
-				frameWidth,
-				activeTheme ?? fallbackTheme(),
-				this[ASSISTANT_MESSAGE_MARKER_SYMBOL],
-			);
+		const originalUpdateContent = assistantProto.updateContent;
+		assistantProto.updateContent = function compactAssistantUpdateContent(this: any, message: any): void {
+			originalUpdateContent.call(this, message);
+			const container = this?.contentContainer;
+			if (!container?.children) return;
+			const markdownTheme = this?.markdownTheme;
+			for (let i = container.children.length - 1; i >= 0; i--) {
+				const child = container.children[i];
+				if (!(child instanceof Markdown)) continue;
+				const markdownChild = child as any;
+				const text = markdownChild.text;
+				if (typeof text !== "string" || text.length === 0) continue;
+				const isThinking = Boolean(markdownChild.defaultTextStyle?.italic);
+				container.children[i] = isThinking
+					? new ThinkingParagraph(text, markdownTheme, markdownChild.defaultTextStyle)
+					: new DottedParagraph(text, markdownTheme);
+			}
 		};
-		assistantProto[ASSISTANT_MESSAGE_PATCH_SYMBOL] = { originalRender };
+		assistantProto[ASSISTANT_MESSAGE_PATCH_SYMBOL] = { originalUpdateContent };
 	}
 
 	pi.on("session_start", (_event, ctx) => {
@@ -134,7 +133,7 @@ export function installMessageRenderers(pi: ExtensionAPI): void {
 		}
 		const assistantState = assistantProto?.[ASSISTANT_MESSAGE_PATCH_SYMBOL];
 		if (assistantState) {
-			assistantProto.render = assistantState.originalRender;
+			assistantProto.updateContent = assistantState.originalUpdateContent;
 			delete assistantProto[ASSISTANT_MESSAGE_PATCH_SYMBOL];
 		}
 		activeTheme = undefined;

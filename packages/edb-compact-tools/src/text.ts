@@ -27,6 +27,14 @@ export function outputWasTruncated(text: string): boolean {
 	return /\btruncated\b|Full output saved to:/i.test(text);
 }
 
+export function cleanToolOutputText(text: string): string {
+	return text
+		.split(/\r?\n/)
+		.filter((line) => !/^\s*Exit code:\s*-?\d+\s*$/i.test(line))
+		.join("\n")
+		.replace(/\s+$/g, "");
+}
+
 export function previewLines(text: string, mode: "head" | "tail", limit = MAX_EXPANDED_LINES): string[] {
 	const lines = text.replace(/\s+$/g, "").split(/\r?\n/);
 	const selected = mode === "tail" ? lines.slice(-limit) : lines.slice(0, limit);

@@ -1,4 +1,5 @@
 import { ANSI_PURPLE, ANSI_RESET } from "./constants.js";
+import { pathExists, shortenPath } from "./path-utils.js";
 import { clip, lineCount, oneLine, outputWasTruncated, textContent } from "./text.js";
 
 // ── Skill path detection ─────────────────────────────────────────
@@ -17,6 +18,7 @@ export function purple(text: string): string {
 type ToolMeta = {
 	color: string | ((args?: any) => string);
 	icon: string;
+	displayName: string | ((args?: any) => string);
 	label: (args: any) => string;
 	summary: (result: any) => string;
 };
@@ -25,6 +27,7 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	bash: {
 		color: "bashMode",
 		icon: "⚙️",
+		displayName: "Run",
 		label: (args) => clip(oneLine(args?.command), 140),
 		summary: (result) => {
 			const text = textContent(result);
@@ -38,7 +41,8 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	read: {
 		color: (args) => (isSkillPath(args?.path) ? "purple" : "toolTitle"),
 		icon: "📖",
-		label: (args) => clip(oneLine(args?.path), 140),
+		displayName: "Read",
+		label: (args) => clip(shortenPath(args?.path), 140),
 		summary: (result) => {
 			const text = textContent(result);
 			const lines = lineCount(text);
@@ -49,9 +53,10 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	grep: {
 		color: "success",
 		icon: "🔎",
+		displayName: "Search",
 		label: (args) => {
 			const pattern = oneLine(args?.pattern);
-			const path = oneLine(args?.path ?? args?.glob ?? ".");
+			const path = shortenPath(args?.path ?? args?.glob ?? ".");
 			return clip(`${pattern}${path ? ` in ${path}` : ""}`, 140);
 		},
 		summary: (result) => {
@@ -64,7 +69,12 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	find: {
 		color: "accent",
 		icon: "🧭",
-		label: (args) => clip(oneLine(args?.path ?? args?.pattern ?? "."), 140),
+		displayName: "Find",
+		label: (args) => {
+			const pattern = oneLine(args?.pattern);
+			const path = shortenPath(args?.path ?? ".") || ".";
+			return clip(pattern && pattern !== path ? `${pattern} in ${path}` : path, 140);
+		},
 		summary: (result) => {
 			const text = textContent(result);
 			const lines = lineCount(text);
@@ -75,7 +85,8 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	ls: {
 		color: "warning",
 		icon: "📁",
-		label: (args) => clip(oneLine(args?.path), 140),
+		displayName: "List",
+		label: (args) => clip(shortenPath(args?.path) || ".", 140),
 		summary: (result) => {
 			const text = textContent(result);
 			const lines = lineCount(text);
@@ -86,10 +97,11 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	edit: {
 		color: "toolDiffAdded",
 		icon: "✏️",
+		displayName: "Edit",
 		label: (args) => {
 			const count = Array.isArray(args?.edits) ? args.edits.length : args?.oldText && args?.newText ? 1 : 0;
 			return clip(
-				`${oneLine(args?.path ?? args?.file_path)}${count ? ` · ${count} replacement${count === 1 ? "" : "s"}` : ""}`,
+				`${shortenPath(args?.path ?? args?.file_path)}${count ? ` · ${count} replacement${count === 1 ? "" : "s"}` : ""}`,
 				140,
 			);
 		},
@@ -110,9 +122,10 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	write: {
 		color: "accent",
 		icon: "📝",
+		displayName: (args) => (pathExists(args?.path ?? args?.file_path) ? "Write" : "Create"),
 		label: (args) => {
 			const bytes = typeof args?.content === "string" ? Buffer.byteLength(args.content, "utf8") : 0;
-			return clip(`${oneLine(args?.path ?? args?.file_path)}${bytes ? ` · ${bytes} bytes` : ""}`, 140);
+			return clip(`${shortenPath(args?.path ?? args?.file_path)}${bytes ? ` · ${bytes} bytes` : ""}`, 140);
 		},
 		summary: (result) => {
 			const text = textContent(result);
@@ -126,6 +139,7 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 const DEFAULT_META: ToolMeta = {
 	color: "accent",
 	icon: "🧩",
+	displayName: "Tool",
 	label: (args) => {
 		const compactArgs = oneLine(JSON.stringify(args ?? {}));
 		return clip(compactArgs === "{}" ? "" : compactArgs, 140);
@@ -149,6 +163,12 @@ export function toolColor(toolName: string, args?: any): string {
 
 export function toolIcon(toolName: string): string {
 	return getMeta(toolName).icon;
+}
+
+export function toolDisplayName(toolName: string, args?: any): string {
+	const meta = TOOL_REGISTRY[toolName];
+	if (!meta) return toolName;
+	return typeof meta.displayName === "function" ? meta.displayName(args) : meta.displayName;
 }
 
 export function callLabel(toolName: string, args: any): string {
