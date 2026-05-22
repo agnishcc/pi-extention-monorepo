@@ -2,7 +2,7 @@
 
 All notable changes to `@agnishc/edb-quit-summary` will be documented in this file.
 
-## [Unreleased]
+## [0.14.0] - 2026-05-22
 
 ### Changed
 - Redesigned output layout: compact single-box format with raccoon ASCII art
