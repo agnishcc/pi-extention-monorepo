@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.13.0] - 2026-05-23
+
+### Added
+- `loadCustomAgents` tests for custom agents context frontmatter parsing.
+
 ## [0.12.0] - 2026-05-22
 
 ### Fixed

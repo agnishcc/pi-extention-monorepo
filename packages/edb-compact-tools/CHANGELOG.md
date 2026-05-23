@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.14.1] - 2026-05-23
+
+### Changed
+- Remove emoji tool icons from registry. Render tool display name bold in pending shimmer and result top line instead.
+
+### Added
+- `shimmerText` option on `BranchToolBlock` — renders the tool name bold-colored in the top line alongside content.
+
 ## [0.12.0] - 2026-05-22
 
 ### Added
