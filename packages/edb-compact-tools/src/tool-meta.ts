@@ -37,7 +37,7 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 		},
 	},
 	read: {
-		color: (args) => (isSkillPath(args?.path) ? "purple" : "toolTitle"),
+		color: (args) => (isSkillPath(args?.path) ? "warning" : "toolTitle"),
 		displayName: "Read",
 		label: (args) => clip(shortenPath(args?.path), 140),
 		summary: (result) => {
