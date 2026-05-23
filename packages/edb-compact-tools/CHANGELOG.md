@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.14.1] - 2026-05-23
+## [0.14.2] - 2026-05-23
 
 ### Changed
 - Remove emoji tool icons from registry. Render tool display name bold in pending shimmer and result top line instead.
