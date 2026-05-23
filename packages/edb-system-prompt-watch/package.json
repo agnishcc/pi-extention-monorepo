@@ -1,0 +1,43 @@
+{
+	"name": "@agnishc/edb-system-prompt-watch",
+	"version": "0.14.0",
+	"description": "Pi extension: alert when Pi's bundled default system prompt changes",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"edb",
+		"system-prompt"
+	],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-system-prompt-watch"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-system-prompt-watch#readme",
+	"bugs": {
+		"url": "https://github.com/agnishcc/pi-extention-monorepo/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"test": "vitest run"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG.md"
+	],
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	}
+}
