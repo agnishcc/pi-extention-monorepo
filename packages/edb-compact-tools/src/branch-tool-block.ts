@@ -10,6 +10,7 @@ export class EmptyBlock {
 
 export interface BranchToolBlockOptions {
 	pending?: boolean;
+	shimmerText?: string;
 }
 
 export class BranchToolBlock {
@@ -51,9 +52,24 @@ export class BranchToolBlock {
 	}
 
 	private renderTop(content: string, width: number): string {
-		const prefix = this.options.pending ? this.theme.fg(this.pendingColor(), "● ") : this.color("● ");
+		const isPending = this.options.pending;
+		const shimmerText = this.options.shimmerText;
+		const activeColor = isPending ? this.pendingColor() : undefined;
+
+		const prefix = activeColor ? this.theme.fg(activeColor, "● ") : this.color("● ");
+
+		let bodyContent: string;
+		if (shimmerText) {
+			const coloredName = activeColor
+				? this.theme.fg(activeColor, this.theme.bold(shimmerText))
+				: this.color(this.theme.bold(shimmerText));
+			bodyContent = `${coloredName} ${content}`;
+		} else {
+			bodyContent = content;
+		}
+
 		const contentWidth = Math.max(1, width - visibleWidth("● "));
-		return `${prefix}${this.fit(content, contentWidth)}`;
+		return `${prefix}${this.fit(bodyContent, contentWidth)}`;
 	}
 
 	private renderBody(content: string, width: number): string {

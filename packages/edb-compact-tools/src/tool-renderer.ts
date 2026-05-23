@@ -3,7 +3,7 @@ import { BranchToolBlock, EmptyBlock } from "./branch-tool-block.js";
 import { MAX_EXPANDED_LINES } from "./constants.js";
 import { formatExpandedLines } from "./expanded-lines.js";
 import { cleanToolOutputText, lineCount, previewLines, textContent } from "./text.js";
-import { callLabel, purple, summaryFor, toolColor, toolDisplayName, toolIcon } from "./tool-meta.js";
+import { callLabel, purple, summaryFor, toolColor, toolDisplayName } from "./tool-meta.js";
 import type { CompactTheme, ToolBlockKind } from "./types.js";
 
 // ── Color resolution ─────────────────────────────────────────────
@@ -19,11 +19,8 @@ function makeColorFn(color: string, theme: CompactTheme): (text: string) => stri
 
 // ── Line builders ────────────────────────────────────────────────
 
-function topLine(toolName: string, theme: CompactTheme, label: string, args?: any): string {
-	const color = toolColor(toolName, args);
-	const title = `${toolIcon(toolName)} ${toolDisplayName(toolName, args)}`;
-	const coloredTitle = color === "purple" ? purple(theme.bold(title)) : theme.fg(color, theme.bold(title));
-	return `${coloredTitle} ${theme.fg("toolOutput", label)}`;
+function topLine(_toolName: string, theme: CompactTheme, label: string, _args?: any): string {
+	return theme.fg("toolOutput", label);
 }
 
 function midLine(_toolName: string, theme: CompactTheme, text: string): string {
@@ -47,7 +44,7 @@ function toolText(
 	theme: CompactTheme,
 	borderColor: string,
 	args?: any,
-	options?: { pending?: boolean },
+	options?: { pending?: boolean; shimmerText?: string },
 ): BranchToolBlock {
 	const color = resolveColor(toolName, args, borderColor);
 	return new BranchToolBlock(kind, lines, theme, makeColorFn(color, theme), options);
@@ -79,7 +76,7 @@ export function renderResult(toolName: string, result: any, options: any, theme:
 			theme,
 			"muted",
 			args,
-			{ pending: true },
+			{ pending: true, shimmerText: toolDisplayName(toolName, args) },
 		);
 	}
 
@@ -99,7 +96,9 @@ export function renderResult(toolName: string, result: any, options: any, theme:
 	const borderColor = failed ? "error" : toolColor(toolName, args) === "purple" ? "purple" : "success";
 
 	if (!options?.expanded || !text.trim()) {
-		return toolText("full", toolName, [top, bottom], theme, borderColor, args);
+		return toolText("full", toolName, [top, bottom], theme, borderColor, args, {
+			shimmerText: toolDisplayName(toolName, args),
+		});
 	}
 
 	const diff = toolName === "edit" && typeof result?.details?.diff === "string" ? result.details.diff : "";
@@ -111,5 +110,5 @@ export function renderResult(toolName: string, result: any, options: any, theme:
 	}
 	lines.unshift(top);
 	lines.push(bottomLine(toolName, theme, `${theme.fg(statusColor, statusIcon)} ${theme.fg("toolOutput", summary)}`));
-	return toolText("full", toolName, lines, theme, borderColor, args);
+	return toolText("full", toolName, lines, theme, borderColor, args, { shimmerText: toolDisplayName(toolName, args) });
 }

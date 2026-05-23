@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { callLabel, isSkillPath, purple, summaryFor, toolColor, toolDisplayName, toolIcon } from "./tool-meta.js";
+import { callLabel, isSkillPath, purple, summaryFor, toolColor, toolDisplayName } from "./tool-meta.js";
 
 describe("isSkillPath", () => {
 	it("detects .agents/skills paths", () => {
@@ -65,22 +65,6 @@ describe("toolColor", () => {
 
 	it("returns accent for unknown tools", () => {
 		expect(toolColor("unknown_tool")).toBe("accent");
-	});
-});
-
-describe("toolIcon", () => {
-	it("returns correct icon per tool", () => {
-		expect(toolIcon("bash")).toBe("⚙️");
-		expect(toolIcon("read")).toBe("📖");
-		expect(toolIcon("grep")).toBe("🔎");
-		expect(toolIcon("find")).toBe("🧭");
-		expect(toolIcon("ls")).toBe("📁");
-		expect(toolIcon("edit")).toBe("✏️");
-		expect(toolIcon("write")).toBe("📝");
-	});
-
-	it("returns default icon for unknown tools", () => {
-		expect(toolIcon("unknown")).toBe("🧩");
 	});
 });
 

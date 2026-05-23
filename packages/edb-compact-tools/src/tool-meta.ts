@@ -17,7 +17,6 @@ export function purple(text: string): string {
 
 type ToolMeta = {
 	color: string | ((args?: any) => string);
-	icon: string;
 	displayName: string | ((args?: any) => string);
 	label: (args: any) => string;
 	summary: (result: any) => string;
@@ -26,7 +25,6 @@ type ToolMeta = {
 const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	bash: {
 		color: "bashMode",
-		icon: "⚙️",
 		displayName: "Run",
 		label: (args) => clip(oneLine(args?.command), 140),
 		summary: (result) => {
@@ -40,7 +38,6 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	},
 	read: {
 		color: (args) => (isSkillPath(args?.path) ? "purple" : "toolTitle"),
-		icon: "📖",
 		displayName: "Read",
 		label: (args) => clip(shortenPath(args?.path), 140),
 		summary: (result) => {
@@ -52,7 +49,6 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	},
 	grep: {
 		color: "success",
-		icon: "🔎",
 		displayName: "Search",
 		label: (args) => {
 			const pattern = oneLine(args?.pattern);
@@ -68,7 +64,6 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	},
 	find: {
 		color: "accent",
-		icon: "🧭",
 		displayName: "Find",
 		label: (args) => {
 			const pattern = oneLine(args?.pattern);
@@ -84,7 +79,6 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	},
 	ls: {
 		color: "warning",
-		icon: "📁",
 		displayName: "List",
 		label: (args) => clip(shortenPath(args?.path) || ".", 140),
 		summary: (result) => {
@@ -96,7 +90,6 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	},
 	edit: {
 		color: "toolDiffAdded",
-		icon: "✏️",
 		displayName: "Edit",
 		label: (args) => {
 			const count = Array.isArray(args?.edits) ? args.edits.length : args?.oldText && args?.newText ? 1 : 0;
@@ -121,7 +114,6 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 	},
 	write: {
 		color: "accent",
-		icon: "📝",
 		displayName: (args) => (pathExists(args?.path ?? args?.file_path) ? "Write" : "Create"),
 		label: (args) => {
 			const bytes = typeof args?.content === "string" ? Buffer.byteLength(args.content, "utf8") : 0;
@@ -138,7 +130,6 @@ const TOOL_REGISTRY: Record<string, ToolMeta> = {
 
 const DEFAULT_META: ToolMeta = {
 	color: "accent",
-	icon: "🧩",
 	displayName: "Tool",
 	label: (args) => {
 		const compactArgs = oneLine(JSON.stringify(args ?? {}));
@@ -159,10 +150,6 @@ function getMeta(toolName: string): ToolMeta {
 export function toolColor(toolName: string, args?: any): string {
 	const color = getMeta(toolName).color;
 	return typeof color === "function" ? color(args) : color;
-}
-
-export function toolIcon(toolName: string): string {
-	return getMeta(toolName).icon;
 }
 
 export function toolDisplayName(toolName: string, args?: any): string {
