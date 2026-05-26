@@ -1,0 +1,30 @@
+{
+	"name": "@agnishc/edb-custom-provider",
+	"version": "0.1.0",
+	"description": "Custom model providers for pi",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"edb"
+	],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"scripts": {
+		"test": "vitest run"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"LICENSE"
+	],
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-ai": "*"
+	}
+}
