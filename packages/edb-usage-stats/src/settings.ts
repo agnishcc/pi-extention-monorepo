@@ -20,6 +20,7 @@ const ALL_PROVIDERS = [
 	"openrouter",
 	"kiro",
 	"zai",
+	"crofai",
 ];
 
 export function getAllProviders(): string[] {

@@ -15,6 +15,7 @@ import { fetchCodexUsage } from "./providers/codex";
 import type { ProviderStatus, UsageSnapshot } from "./providers/common";
 import { fetchGeminiStatus, fetchProviderStatus, getStatusEmoji, timeout } from "./providers/common";
 import { fetchCopilotUsage } from "./providers/copilot";
+import { fetchCrofAiUsage } from "./providers/crofai";
 import { fetchGeminiUsage } from "./providers/gemini";
 import { fetchKiroUsage } from "./providers/kiro";
 import { fetchMinimaxUsage } from "./providers/minimax";
@@ -34,6 +35,7 @@ export const PROVIDER_DISPLAY: Record<string, string> = {
 	openrouter: "OpenRouter",
 	kiro: "Kiro",
 	zai: "z.ai",
+	crofai: "CrofAi",
 };
 
 type ProviderFetcher = (modelRegistry?: any) => Promise<UsageSnapshot>;
@@ -49,6 +51,7 @@ const FETCHERS: Record<string, ProviderFetcher> = {
 	openrouter: () => fetchOpenRouterUsage(),
 	kiro: () => fetchKiroUsage(),
 	zai: () => fetchZaiUsage(),
+	crofai: () => fetchCrofAiUsage(),
 };
 
 const STATUS_FETCHERS: Record<string, StatusFetcher> = {
