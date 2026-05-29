@@ -1,5 +1,5 @@
 import type { RateWindow, UsageSnapshot } from "./common";
-import { readPiAuth } from "./common";
+import { formatReset, readPiAuth } from "./common";
 
 function loadCrofAiApiKey(): string | undefined {
 	// pi auth.json first
@@ -44,11 +44,26 @@ export async function fetchCrofAiUsage(): Promise<UsageSnapshot> {
 		const usableRequests = data.usable_requests;
 		const dailyTotal = 500;
 
+		// Calculate next reset: 10:30 AM IST = 05:00 UTC daily
+		const now = new Date();
+		const todayReset = new Date(now);
+		todayReset.setUTCHours(5, 0, 0, 0); // 05:00 UTC = 10:30 IST
+		const nextReset =
+			now >= todayReset
+				? new Date(todayReset.getTime() + 24 * 60 * 60 * 1000) // tomorrow
+				: todayReset;
+		const resetDesc = formatReset(nextReset);
+
 		const windows: RateWindow[] = [];
 		if (usableRequests !== null) {
 			const used = dailyTotal - usableRequests;
 			const usedPercent = Math.max(0, Math.min(100, (used / dailyTotal) * 100));
-			windows.push({ label: "Daily", usedPercent });
+			windows.push({
+				label: "Daily",
+				usedPercent,
+				resetDescription: `Resets in ${resetDesc} (${dailyTotal - used}/${dailyTotal})`,
+				resetsAt: nextReset,
+			});
 		}
 
 		return { provider: "crofai", displayName: "CrofAi", windows };
