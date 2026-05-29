@@ -95,9 +95,18 @@ export async function fetchMinimaxUsage(): Promise<UsageSnapshot> {
 			}
 
 			// Additional models with different limits get their own rows
+			const MODEL_DISPLAY_NAMES: Record<string, string> = {
+				"coding-plan-vlm": "Image Search",
+				"coding-plan-search": "Web Search",
+			};
+
 			for (let i = 1; i < models.length; i++) {
 				const m = models[i];
-				const mName = (m.model_name ?? "").replace(/^MiniMax-/, "").substring(0, 12);
+				const rawName = m.model_name ?? "";
+
+				// Only show specific models, skip music/lyrics/speech/video/image
+				if (!MODEL_DISPLAY_NAMES[rawName]) continue;
+
 				const mTotal = m.current_interval_total_count ?? 0;
 				const mRemaining = m.current_interval_usage_count ?? 0;
 				const mRemainsMs = m.remains_time ?? 0;
@@ -105,7 +114,7 @@ export async function fetchMinimaxUsage(): Promise<UsageSnapshot> {
 				if (mTotal > 0) {
 					const usedPercent = Math.max(0, Math.min(100, ((mTotal - mRemaining) / mTotal) * 100));
 					windows.push({
-						label: mName || `M${i}`,
+						label: MODEL_DISPLAY_NAMES[rawName],
 						usedPercent,
 						resetDescription: mRemainsMs > 0 ? formatReset(new Date(Date.now() + mRemainsMs)) : undefined,
 					});
