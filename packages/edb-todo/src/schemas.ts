@@ -1,12 +1,60 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 
-// ── TaskCreate schema ──────────────────────────────────────────────────────────
+// ── Single-task fields (shared between top-level and tasks[] items) ────────────
 
-export const TodoCreateParams = Type.Object({
+const TaskItemSchema = Type.Object({
 	content: Type.String({
 		description: "A brief, actionable title in imperative form (e.g., 'Fix authentication bug in login flow').",
 	}),
+	description: Type.Optional(
+		Type.String({
+			description: "Detailed description of what needs to be done, including context and acceptance criteria.",
+		}),
+	),
+	priority: Type.Optional(
+		StringEnum(["high", "medium", "low"] as const, { description: "Task priority. Defaults to 'medium'." }),
+	),
+	activeForm: Type.Optional(
+		Type.String({
+			description:
+				"Present continuous form shown in the spinner when in_progress (e.g., 'Fixing authentication bug').",
+		}),
+	),
+	parentId: Type.Optional(
+		Type.String({
+			description: "Parent task ID. Creates this as a subtask of the specified task.",
+		}),
+	),
+	groupId: Type.Optional(
+		Type.String({
+			description:
+				"Parallel group ID. Tasks with the same groupId run concurrently. " +
+				"A task with blockedByGroup pointing to this groupId starts only when ALL group tasks complete.",
+		}),
+	),
+	metadata: Type.Optional(
+		Type.Record(Type.String(), Type.Any(), { description: "Arbitrary key-value metadata to attach to the task." }),
+	),
+});
+
+// ── TaskCreate schema ──────────────────────────────────────────────────────────
+
+export const TodoCreateParams = Type.Object({
+	// ── Batch mode: pass tasks[] to create multiple tasks in one call ──────────
+	tasks: Type.Optional(
+		Type.Array(TaskItemSchema, {
+			description:
+				"Create multiple tasks at once. When provided, all top-level single-task fields are ignored. " +
+				"Prefer this over calling TaskCreate multiple times.",
+		}),
+	),
+	// ── Single-task fields (used when tasks[] is absent) ──────────────────────
+	content: Type.Optional(
+		Type.String({
+			description: "A brief, actionable title in imperative form (e.g., 'Fix authentication bug in login flow').",
+		}),
+	),
 	description: Type.Optional(
 		Type.String({
 			description: "Detailed description of what needs to be done, including context and acceptance criteria.",

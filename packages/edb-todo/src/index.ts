@@ -313,6 +313,14 @@ Skip using this tool when:
 
 NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
 
+## Batch vs single
+
+Use the \`tasks\` array to create multiple tasks in a single call — **always prefer this over calling TaskCreate multiple times**:
+\`\`\`json
+{ "tasks": [ { "content": "Task A" }, { "content": "Task B", "description": "..." } ] }
+\`\`\`
+For a single task, pass the fields at the top level (\`content\`, \`description\`, etc.).
+
 ## Task Fields
 
 - **content**: A brief, actionable title in imperative form (e.g., "Fix authentication bug in login flow")
@@ -327,9 +335,11 @@ All tasks are created with status \`pending\`.
 - Create tasks with clear, specific content that describes the outcome
 - Include enough detail in the description for another agent to understand and complete the task
 - After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed
-- Check TaskList first to avoid creating duplicate tasks`,
+- Check TaskList first to avoid creating duplicate tasks
+- **Always use tasks[] for multiple tasks** — one call instead of many`,
 		promptGuidelines: [
 			"When working on complex multi-step tasks, use TaskCreate to track progress and TaskUpdate to update status.",
+			"To create multiple tasks, pass them all in a single call using the tasks[] array — never call TaskCreate multiple times.",
 			"Mark tasks as in_progress before starting work and completed when done.",
 			"Use TaskList to check for available work after completing a task.",
 		],
@@ -337,6 +347,58 @@ All tasks are created with status \`pending\`.
 
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			autoClear.resetBatchCountdown();
+			widget.setUICtx(ctx.ui);
+
+			// ── Batch mode: tasks[] provided ──────────────────────────────────
+			const batchItems = params.tasks as
+				| Array<{
+						content: string;
+						description?: string;
+						priority?: string;
+						activeForm?: string;
+						parentId?: string;
+						groupId?: string;
+						metadata?: Record<string, unknown>;
+				  }>
+				| undefined;
+
+			if (batchItems && batchItems.length > 0) {
+				const created = batchItems.map((item) =>
+					store.create(item.content, {
+						description: item.description,
+						priority: item.priority as TaskPriority | undefined,
+						activeForm: item.activeForm,
+						parentId: item.parentId,
+						groupId: item.groupId,
+						metadata: item.metadata,
+					}),
+				);
+				notifyBridgeOnChange();
+				widget.update();
+				const summary = created.map((t) => `#${t.id}: ${t.content}`).join(", ");
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Created ${created.length} task${created.length === 1 ? "" : "s"}: ${summary}`,
+						},
+					],
+					details: { tasks: [...store.list()] } satisfies TaskDetails,
+				};
+			}
+
+			// ── Single-task mode: top-level fields ──────────────────────────────
+			if (!params.content) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: "TaskCreate requires either a tasks[] array or a top-level content field.",
+						},
+					],
+					details: { tasks: [...store.list()] } satisfies TaskDetails,
+				};
+			}
 			const task = store.create(params.content, {
 				description: params.description,
 				priority: params.priority as TaskPriority | undefined,
@@ -346,7 +408,6 @@ All tasks are created with status \`pending\`.
 				metadata: params.metadata,
 			});
 			notifyBridgeOnChange();
-			widget.setUICtx(ctx.ui);
 			widget.update();
 			return {
 				content: [{ type: "text", text: `Task #${task.id} created successfully: ${task.content}` }],
@@ -355,6 +416,20 @@ All tasks are created with status \`pending\`.
 		},
 
 		renderCall(args, theme) {
+			const batchTasks = args.tasks as Array<{ content?: string }> | undefined;
+			if (batchTasks && batchTasks.length > 0) {
+				const preview = batchTasks
+					.slice(0, 3)
+					.map((t) => t.content ?? "")
+					.filter(Boolean)
+					.join(", ");
+				const extra = batchTasks.length > 3 ? ` +${batchTasks.length - 3} more` : "";
+				return new Text(
+					`${theme.fg("toolTitle", theme.bold("TaskCreate "))}${theme.fg("dim", `[${batchTasks.length}]`)}  ${theme.fg("muted", preview + extra)}`,
+					0,
+					0,
+				);
+			}
 			const content = (args.content as string) ?? "";
 			const priority = (args.priority as string) ?? "medium";
 			const pColor = priorityColor(priority as TaskPriority);
