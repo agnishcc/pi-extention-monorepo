@@ -73,7 +73,7 @@ export interface AgentRecord {
 	agentName?: string;
 	/** Linked task ID in the shared task store. Used for blocked-state check in get_subagent_result. */
 	taskId?: string;
-	status: "queued" | "running" | "completed" | "steered" | "aborted" | "stopped" | "error";
+	status: "queued" | "running" | "completed" | "steered" | "aborted" | "stopped" | "error" | "suspended";
 	result?: string;
 	error?: string;
 	toolUses: number;
@@ -88,6 +88,11 @@ export interface AgentRecord {
 	resultConsumed?: boolean;
 	/** Steering messages queued before the session was ready. */
 	pendingSteers?: string[];
+	/**
+	 * True when the agent sent ask_supervisor and is waiting for the supervisor's answer.
+	 * The session is still alive — the agent will be resumed via manager.resumeInBackground.
+	 */
+	pendingSupervisorAsk?: boolean;
 	/** Worktree info if the agent is running in an isolated worktree. */
 	worktree?: { path: string; branch: string };
 	/** Worktree cleanup result after agent completion. */

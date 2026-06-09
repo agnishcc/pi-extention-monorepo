@@ -324,12 +324,17 @@ export class AgentWidget {
 		const allAgents = this.manager.listAgents();
 		const running = allAgents.filter((a) => a.status === "running");
 		const queued = allAgents.filter((a) => a.status === "queued");
+		const suspended = allAgents.filter((a) => a.status === "suspended");
 		const finished = allAgents.filter(
 			(a) =>
-				a.status !== "running" && a.status !== "queued" && a.completedAt && this.shouldShowFinished(a.id, a.status),
+				a.status !== "running" &&
+				a.status !== "queued" &&
+				a.status !== "suspended" &&
+				a.completedAt &&
+				this.shouldShowFinished(a.id, a.status),
 		);
 
-		const hasActive = running.length > 0 || queued.length > 0;
+		const hasActive = running.length > 0 || queued.length > 0 || suspended.length > 0;
 		const hasFinished = finished.length > 0;
 
 		// Nothing to show — return empty (widget will be unregistered by update())
@@ -342,7 +347,7 @@ export class AgentWidget {
 		const frame = SPINNER[this.widgetFrame % SPINNER.length];
 
 		// Build sections separately for overflow-aware assembly.
-		// Each running agent = 2 lines (header + activity), finished = 1 line, queued = 1 line.
+		// Each running agent = 2 lines (header + activity), suspended/finished/queued = 1 line.
 
 		const finishedLines: string[] = [];
 		for (const a of finished) {
@@ -380,6 +385,19 @@ export class AgentWidget {
 			]);
 		}
 
+		const suspendedLines: string[] = [];
+		for (const a of suspended) {
+			const name = getDisplayName(a.type);
+			const elapsed = formatMs(Date.now() - a.startedAt);
+			suspendedLines.push(
+				truncate(
+					`${theme.fg("dim", "├─")} ${theme.fg("warning", "⏸")} ${theme.fg("dim", name)}` +
+						`${a.agentName ? `  ${theme.fg("dim", a.agentName)}` : ""}  ${theme.fg("dim", a.description)}` +
+						` ${theme.fg("dim", "·")} ${theme.fg("dim", `waiting for supervisor · ${elapsed}`)}`,
+				),
+			);
+		}
+
 		const queuedLine =
 			queued.length > 0
 				? truncate(
@@ -389,7 +407,7 @@ export class AgentWidget {
 
 		// Assemble with overflow cap (heading + overflow indicator = 2 reserved lines).
 		const maxBody = MAX_WIDGET_LINES - 1; // heading takes 1 line
-		const totalBody = finishedLines.length + runningLines.length * 2 + (queuedLine ? 1 : 0);
+		const totalBody = finishedLines.length + runningLines.length * 2 + suspendedLines.length + (queuedLine ? 1 : 0);
 
 		const lines: string[] = [truncate(`${theme.fg(headingColor, headingIcon)} ${theme.fg(headingColor, "Agents")}`)];
 
@@ -397,6 +415,7 @@ export class AgentWidget {
 			// Everything fits — add all lines and fix up connectors for the last item.
 			lines.push(...finishedLines);
 			for (const pair of runningLines) lines.push(...pair);
+			lines.push(...suspendedLines);
 			if (queuedLine) lines.push(queuedLine);
 
 			// Fix last connector: swap ├─ → └─ and │ → space for activity lines.
@@ -436,7 +455,17 @@ export class AgentWidget {
 				budget--;
 			}
 
-			// 3. Finished agents
+			// 3. Suspended agents
+			for (const sl of suspendedLines) {
+				if (budget >= 1) {
+					lines.push(sl);
+					budget--;
+				} else {
+					hiddenFinished++;
+				}
+			}
+
+			// 4. Finished agents
 			for (const fl of finishedLines) {
 				if (budget >= 1) {
 					lines.push(fl);
@@ -470,17 +499,20 @@ export class AgentWidget {
 		// Lightweight existence checks — full categorization happens in renderWidget()
 		let runningCount = 0;
 		let queuedCount = 0;
+		let suspendedCount = 0;
 		let hasFinished = false;
 		for (const a of allAgents) {
 			if (a.status === "running") {
 				runningCount++;
 			} else if (a.status === "queued") {
 				queuedCount++;
+			} else if (a.status === "suspended") {
+				suspendedCount++;
 			} else if (a.completedAt && this.shouldShowFinished(a.id, a.status)) {
 				hasFinished = true;
 			}
 		}
-		const hasActive = runningCount > 0 || queuedCount > 0;
+		const hasActive = runningCount > 0 || queuedCount > 0 || suspendedCount > 0;
 
 		// Nothing to show — clear widget
 		if (!hasActive && !hasFinished) {

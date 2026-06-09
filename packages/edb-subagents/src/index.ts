@@ -543,6 +543,51 @@ export default function (pi: ExtensionAPI) {
 		if (p?.path) todoStorePath = p.path;
 	});
 
+	// ── bridge:agent_suspending ──────────────────────────────────────────────
+	// Fired by edb-bridge when a sub-agent calls ask_supervisor.
+	// Mark the agent so that when runAgent() returns we suspend instead of completing.
+	pi.events.on("bridge:agent_suspending", (payload: unknown) => {
+		const p = payload as { agentId?: string } | undefined;
+		if (!p?.agentId) return;
+		const record = manager.getRecord(p.agentId);
+		if (record) {
+			record.pendingSupervisorAsk = true;
+			widget.update();
+		}
+	});
+
+	// Fired by edb-bridge when ask_supervisor fails to reach the supervisor.
+	// Undo the suspending flag so the agent completes normally.
+	pi.events.on("bridge:agent_suspend_cancelled", (payload: unknown) => {
+		const p = payload as { agentId?: string } | undefined;
+		if (!p?.agentId) return;
+		const record = manager.getRecord(p.agentId);
+		if (record) {
+			record.pendingSupervisorAsk = false;
+		}
+	});
+
+	// ── bridge:resume_agent ─────────────────────────────────────────────────
+	// Fired by edb-bridge when answer_subagent is called.
+	// Resume the suspended agent with the supervisor's answer.
+	pi.events.on("bridge:resume_agent", (payload: unknown) => {
+		const p = payload as { agentId?: string; answer?: string } | undefined;
+		if (!p?.agentId || !p.answer) return;
+		const record = manager.getRecord(p.agentId);
+		if (!record?.session) return;
+
+		const resumed = manager.resumeInBackground(p.agentId, `Supervisor replied: ${p.answer}`);
+		if (resumed) {
+			// Ensure activity tracking exists for the resumed agent
+			if (!agentActivity.has(p.agentId)) {
+				const { state } = createActivityTracker(undefined, () => widget.update());
+				agentActivity.set(p.agentId, state);
+			}
+			widget.ensureTimer();
+			widget.update();
+		}
+	});
+
 	/**
 	 * Read a task from the shared task store (synchronous, best-effort).
 	 * Returns undefined if the store is not available or the task doesn't exist.

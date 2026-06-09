@@ -92,64 +92,7 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 
 	const pendingAsks = new Map<string, PendingAsk>();
 
-	// Per-session outbound ask waiters: keyed by session ID
-	const outboundAskWaiters = new Map<
-		string,
-		{
-			replyTo: string;
-			resolve: (text: string) => void;
-			reject: (err: Error) => void;
-		}
-	>();
-
-	function waitForReply(sessionId: string, messageId: string, signal?: AbortSignal): Promise<string> {
-		if (outboundAskWaiters.has(sessionId)) {
-			return Promise.reject(new Error("Already waiting for a reply from supervisor in this session"));
-		}
-		if (signal?.aborted) return Promise.reject(new Error("Cancelled"));
-
-		return new Promise((resolve, reject) => {
-			const timeout = setTimeout(() => {
-				outboundAskWaiters.delete(sessionId);
-				reject(new Error("No reply from supervisor within 10 minutes"));
-			}, ASK_TIMEOUT_MS);
-
-			const onAbort = () => {
-				clearTimeout(timeout);
-				outboundAskWaiters.delete(sessionId);
-				reject(new Error("Cancelled"));
-			};
-			signal?.addEventListener("abort", onAbort, { once: true });
-
-			outboundAskWaiters.set(sessionId, {
-				replyTo: messageId,
-				resolve: (text) => {
-					clearTimeout(timeout);
-					signal?.removeEventListener("abort", onAbort);
-					outboundAskWaiters.delete(sessionId);
-					resolve(text);
-				},
-				reject: (err) => {
-					clearTimeout(timeout);
-					signal?.removeEventListener("abort", onAbort);
-					outboundAskWaiters.delete(sessionId);
-					reject(err);
-				},
-			});
-		});
-	}
-
 	function handleIncoming(from: SessionInfo, message: BridgeMessage): void {
-		// Check if this is a reply to an outbound ask
-		if (message.replyTo) {
-			for (const [, waiter] of outboundAskWaiters) {
-				if (waiter.replyTo === message.replyTo) {
-					waiter.resolve(message.content.text);
-					return;
-				}
-			}
-		}
-
 		// Task update notification — trigger widget refresh
 		if (message.type === "task_updated") {
 			pi.events.emit(EV_TASK_UPDATED, message.content.data ?? {});
@@ -353,12 +296,6 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 
 		// Clean up per-session state regardless
 		if (currentSessionId) sessionBridgeCtx.delete(currentSessionId);
-		// Clean up outbound waiters for this session only
-		const sessionWaiter = outboundAskWaiters.get(currentSessionId ?? "");
-		if (sessionWaiter) {
-			sessionWaiter.reject(new Error("Session shutting down"));
-			outboundAskWaiters.delete(currentSessionId ?? "");
-		}
 
 		if (isMainSession) {
 			// Full teardown — this is the orchestrator shutting down
@@ -372,10 +309,6 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 				ask.reject(new Error("Session shutting down"));
 			}
 			pendingAsks.clear();
-			for (const waiter of outboundAskWaiters.values()) {
-				waiter.reject(new Error("Session shutting down"));
-			}
-			outboundAskWaiters.clear();
 			if (client) {
 				await client.disconnect();
 				client = null;
@@ -432,6 +365,12 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 					pi.events.emit("bridge:supervisor_answered", { taskId: ask.taskId });
 				}
 
+				// Resume the suspended sub-agent session with the answer.
+				// edb-subagents listens for this event and calls manager.resumeInBackground.
+				if (ask.agentId) {
+					pi.events.emit("bridge:resume_agent", { agentId: ask.agentId, answer: params.answer });
+				}
+
 				if (!result.delivered) {
 					return textResult(
 						`Answer could not reach sub-agent (${result.reason ?? "disconnected"}). The ask was resolved locally.`,
@@ -453,26 +392,28 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 		},
 	});
 
-	// ── ask_supervisor (sub-agent sessions with bridge context) ───────────────
+	// ── ask_supervisor (sub-agent sessions with bridge context) ———————————
 
 	pi.registerTool({
 		name: "ask_supervisor",
 		label: "Ask Supervisor",
 		description:
-			"Ask the orchestrator a blocking question and wait for their reply before continuing.\n\n" +
-			"Use when blocked, uncertain, or facing a decision. The tool blocks until the supervisor replies.\n" +
+			"Ask the orchestrator a question. Returns immediately — your session will be automatically resumed with the answer.\n\n" +
+			"Use when blocked, uncertain, or facing a decision that requires supervisor input.\n" +
 			"Do NOT use for routine completion — return results normally.",
-		promptSnippet: "Ask the orchestrator a blocking question and wait for their reply.",
+		promptSnippet:
+			"Ask the orchestrator a question. Returns immediately — session resumes automatically with the answer.",
 		promptGuidelines: [
 			"Use ask_supervisor when blocked by a decision or missing critical information.",
 			"Do not use for routine task completion.",
+			"After calling ask_supervisor, write a brief status of your progress then stop all tool calls. Your session resumes automatically when the supervisor answers.",
 		],
 		parameters: Type.Object({
 			question: Type.String({ description: "The question for the supervisor." }),
 			task_id: Type.Optional(Type.String({ description: "Optional: linked task ID." })),
 		}),
 
-		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const sessionId = ctx.sessionManager.getSessionId();
 			const bridgeCtx = sessionBridgeCtx.get(sessionId);
 
@@ -487,8 +428,12 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 			});
 
 			const messageId = randomUUID();
-			const replyPromise = waitForReply(sessionId, messageId, signal);
-			replyPromise.catch(() => undefined);
+
+			// Signal edb-subagents to mark this agent as suspending BEFORE we send
+			// the message — ensures the flag is set before runAgent() can return.
+			if (bridgeCtx.agentId) {
+				pi.events.emit("bridge:agent_suspending", { agentId: bridgeCtx.agentId });
+			}
 
 			try {
 				const result = await c.send(bridgeCtx.parentSessionId, {
@@ -500,20 +445,27 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 				});
 
 				if (!result.delivered) {
-					outboundAskWaiters.get(sessionId)?.reject(new Error(`Supervisor not reachable: ${result.reason}`));
-					return textResult(`Supervisor not reachable: ${result.reason ?? "session not found"}`);
+					if (bridgeCtx.agentId) {
+						pi.events.emit("bridge:agent_suspend_cancelled", { agentId: bridgeCtx.agentId });
+					}
+					return textResult(
+						`Supervisor not reachable: ${result.reason ?? "session not found"}. Continuing without answer.`,
+					);
 				}
 			} catch (err) {
-				outboundAskWaiters.get(sessionId)?.reject(new Error(getError(err)));
-				return textResult(`Failed to send question: ${getError(err)}`);
+				if (bridgeCtx.agentId) {
+					pi.events.emit("bridge:agent_suspend_cancelled", { agentId: bridgeCtx.agentId });
+				}
+				return textResult(`Failed to send question: ${getError(err)}. Continuing without answer.`);
 			}
 
-			try {
-				const answer = await replyPromise;
-				return textResult(`Supervisor replied: ${answer}`);
-			} catch (err) {
-				return textResult(`Ask failed: ${getError(err)}`);
-			}
+			// Fire-and-forget: return immediately. The supervisor answers via
+			// answer_subagent, which emits bridge:resume_agent to restart this session.
+			return textResult(
+				"Question sent to supervisor. " +
+					"Write a brief summary of your progress so far, then stop all tool calls. " +
+					"Your session will be resumed automatically with the supervisor's answer.",
+			);
 		},
 
 		renderCall(args, theme) {
@@ -525,10 +477,9 @@ export default function edbBridgeExtension(pi: ExtensionAPI): void {
 			);
 		},
 
-		renderResult(result, { isPartial }, theme) {
-			if (isPartial) return new Text(theme.fg("warning", "⏸ waiting for supervisor..."), 0, 0);
+		renderResult(result, _opts, theme) {
 			const text = result.content[0]?.type === "text" ? result.content[0].text : "";
-			return new Text(theme.fg("success", "✓ ") + theme.fg("muted", text.slice(0, 120)), 0, 0);
+			return new Text(theme.fg("warning", "⏸ ") + theme.fg("muted", text.slice(0, 120)), 0, 0);
 		},
 	});
 

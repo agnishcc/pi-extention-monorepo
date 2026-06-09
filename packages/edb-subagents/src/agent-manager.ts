@@ -296,6 +296,18 @@ export class AgentManager {
 
 		const promise = runWithFallback()
 			.then(({ responseText, session, aborted, steered }) => {
+				// If agent sent ask_supervisor and yielded, suspend instead of completing.
+				// The session stays alive — resumeInBackground will restart it with the answer.
+				if (record.pendingSupervisorAsk && record.status !== "stopped") {
+					record.status = "suspended";
+					record.session = session;
+					// Decrement so the queue can drain — this agent is no longer "running"
+					if (options.isBackground) {
+						this.runningBackground--;
+						this.drainQueue();
+					}
+					return responseText;
+				}
 				// Don't overwrite status if externally stopped via abort()
 				if (record.status !== "stopped") {
 					record.status = aborted ? "aborted" : steered ? "steered" : "completed";
@@ -432,11 +444,13 @@ export class AgentManager {
 	/**
 	 * Resume an existing agent session with a new prompt in the background (non-blocking).
 	 * Returns immediately; the record's promise resolves when done.
+	 * Also clears pendingSupervisorAsk so the agent transitions cleanly from "suspended".
 	 */
 	resumeInBackground(id: string, prompt: string): AgentRecord | undefined {
 		const record = this.agents.get(id);
 		if (!record?.session) return undefined;
 
+		record.pendingSupervisorAsk = false;
 		record.status = "running";
 		record.startedAt = Date.now();
 		record.completedAt = undefined;
@@ -557,7 +571,7 @@ export class AgentManager {
 	private cleanup() {
 		const cutoff = Date.now() - 10 * 60_000;
 		for (const [id, record] of this.agents) {
-			if (record.status === "running" || record.status === "queued") continue;
+			if (record.status === "running" || record.status === "queued" || record.status === "suspended") continue;
 			if ((record.completedAt ?? 0) >= cutoff) continue;
 			this.removeRecord(id, record);
 		}
@@ -569,7 +583,7 @@ export class AgentManager {
 	 */
 	clearCompleted(): void {
 		for (const [id, record] of this.agents) {
-			if (record.status === "running" || record.status === "queued") continue;
+			if (record.status === "running" || record.status === "queued" || record.status === "suspended") continue;
 			this.removeRecord(id, record);
 		}
 	}
