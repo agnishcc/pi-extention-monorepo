@@ -238,7 +238,7 @@ export function registerCrofAiProvider(pi: ExtensionAPI): void {
 	pi.registerProvider(PROVIDER, {
 		name: "CrofAi",
 		baseUrl: BASE_URL,
-		apiKey: "CROFAI_API_KEY",
+		apiKey: "$CROFAI_API_KEY",
 		api: "openai-completions",
 		authHeader: true,
 		models: MODELS,
