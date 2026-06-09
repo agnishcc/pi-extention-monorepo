@@ -109,6 +109,7 @@ export function createFooterRenderer(
 				let totalCacheRead = 0;
 				let totalCacheWrite = 0;
 				let totalCost = 0;
+				let latestCacheHitRate: number | undefined;
 
 				for (const entry of ctx.sessionManager.getEntries()) {
 					if (entry.type === "message" && entry.message.role === "assistant") {
@@ -119,12 +120,14 @@ export function createFooterRenderer(
 						totalCacheRead += msg.usage.cacheRead;
 						totalCacheWrite += msg.usage.cacheWrite;
 						totalCost += msg.usage.cost.total;
+						const promptTokens = msg.usage.input + msg.usage.cacheRead + msg.usage.cacheWrite;
+						latestCacheHitRate = promptTokens > 0 ? (msg.usage.cacheRead / promptTokens) * 100 : undefined;
 					}
 				}
 
 				// Build three groups separated by pipes
 				// Group 1: ↑input ↓output
-				// Group 2: Rcache Wcache $cost
+				// Group 2: Rcache Wcache CH% $cost
 				// Group 3: context%
 				const { tps } = tpsState;
 				const showTps = tps > 0;
@@ -139,6 +142,9 @@ export function createFooterRenderer(
 				const group2Parts: string[] = [];
 				if (totalCacheRead) group2Parts.push(`${iconCacheRead}${formatTokens(totalCacheRead)}`);
 				if (totalCacheWrite) group2Parts.push(`${iconCacheWrite}${formatTokens(totalCacheWrite)}`);
+				if ((totalCacheRead > 0 || totalCacheWrite > 0) && latestCacheHitRate !== undefined) {
+					group2Parts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
+				}
 				const usingSubscription = ctx.model ? ctx.modelRegistry.isUsingOAuth(ctx.model) : false;
 				if (totalCost || usingSubscription) {
 					group2Parts.push(`$${totalCost.toFixed(3)}${usingSubscription ? " (sub)" : ""}`);
