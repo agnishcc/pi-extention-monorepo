@@ -107,7 +107,7 @@ async function generateSessionName(prompt: string, ctx: ExtensionContext): Promi
 		{
 			apiKey: auth.apiKey,
 			headers: auth.headers,
-			maxTokens: 256,
+			maxTokens: 1024,
 		},
 	);
 
