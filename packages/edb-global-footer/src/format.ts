@@ -40,6 +40,8 @@ export function formatThinkingLabel(level: ThinkingLevel): string {
 			return "H";
 		case "xhigh":
 			return "XH";
+		case "max":
+			return "MAX";
 		default:
 			return "";
 	}

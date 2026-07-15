@@ -191,10 +191,20 @@ export function createFooterRenderer(
 					}
 					let modelText = theme.bold(model.id || "unknown");
 					if (model.reasoning) {
-						const thinking = formatThinkingLabel(getThinkingLevel(ctx));
+						const thinkingLevel = getThinkingLevel(ctx);
+						const thinking = formatThinkingLabel(thinkingLevel);
 						if (thinking) {
 							const thinkLabel = hasNerdFonts ? withIcon(iconThink, thinking) : thinking;
-							modelText += `${sep}${theme.fg("dim", thinkLabel)}`;
+							const thinkingColorMap: Record<string, string> = {
+								minimal: "thinkingMinimal",
+								low: "thinkingLow",
+								medium: "thinkingMedium",
+								high: "thinkingHigh",
+								xhigh: "thinkingXhigh",
+								max: "thinkingMax",
+							};
+							const thinkColor = thinkingColorMap[thinkingLevel] ?? "dim";
+							modelText += `${sep}${theme.fg(thinkColor, thinkLabel)}`;
 						}
 					}
 
