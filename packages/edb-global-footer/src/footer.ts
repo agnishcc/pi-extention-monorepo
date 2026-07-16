@@ -50,6 +50,69 @@ interface TpsState {
 	lastInputTokens: number;
 }
 
+// ── Thinking label animation helpers ─────────────────────────────────────────
+
+const ANIM_BAND_WIDTH = 2;
+const ANIM_INTERVAL_MS = 150;
+
+type Rgb = [number, number, number];
+
+/** Extract RGB from an ANSI-escaped string produced by theme.fg() */
+function extractRgb(themed: string): Rgb | null {
+	const match = themed.match(/\x1b\[38;2;(\d+);(\d+);(\d+)m/);
+	if (!match) return null;
+	return [parseInt(match[1]!, 10), parseInt(match[2]!, 10), parseInt(match[3]!, 10)];
+}
+
+function blendRgb(a: Rgb, b: Rgb, t: number): Rgb {
+	return [
+		Math.round(a[0] + (b[0] - a[0]) * t),
+		Math.round(a[1] + (b[1] - a[1]) * t),
+		Math.round(a[2] + (b[2] - a[2]) * t),
+	];
+}
+
+function lightenRgb(c: Rgb, amount: number): Rgb {
+	return [
+		Math.min(255, Math.round(c[0] + (255 - c[0]) * amount)),
+		Math.min(255, Math.round(c[1] + (255 - c[1]) * amount)),
+		Math.min(255, Math.round(c[2] + (255 - c[2]) * amount)),
+	];
+}
+
+function rgbEsc(r: number, g: number, b: number): string {
+	return `\x1b[38;2;${r};${g};${b}m`;
+}
+
+const RESET = "\x1b[0m";
+
+/**
+ * Shimmer sweep: a bright highlight band sweeps left→right across each character.
+ * Used for the "max" thinking level.
+ */
+function shimmerText(text: string, frame: number, base: Rgb, highlight: Rgb): string {
+	const totalWidth = text.length + ANIM_BAND_WIDTH * 2;
+	const pos = frame % totalWidth;
+	let result = "";
+	for (let i = 0; i < text.length; i++) {
+		const dist = Math.abs(i - pos);
+		const t = Math.max(0, 1 - dist / ANIM_BAND_WIDTH);
+		const [r, g, b] = blendRgb(base, highlight, t);
+		result += `${rgbEsc(r, g, b)}${text[i]}${RESET}`;
+	}
+	return result;
+}
+
+/**
+ * Breathing pulse: smooth sine-wave oscillation between base and a lighter tint.
+ * Period: 32 frames ≈ 4.8s at 150ms/frame. Used for the "xhigh" thinking level.
+ */
+function pulseText(text: string, frame: number, base: Rgb, lighter: Rgb): string {
+	const t = (Math.sin((frame / 16) * Math.PI) + 1) / 2; // 0 → 1 → 0
+	const [r, g, b] = blendRgb(base, lighter, t * 0.55); // max 55% blend
+	return `${rgbEsc(r, g, b)}${text}${RESET}`;
+}
+
 // ── Footer renderer factory ────────────────────────────────────────────────────
 
 /**
@@ -68,11 +131,54 @@ export function createFooterRenderer(
 			requestRender();
 		});
 
+		// ── Animation state ───────────────────────────────────────────────────
+		let animFrame = 0;
+		let animTimer: ReturnType<typeof setInterval> | null = null;
+
+		// Cached RGB values for animated levels (null = not yet resolved or theme changed)
+		let maxBase: Rgb | null = null;
+		let maxHighlight: Rgb | null = null;
+		let xhighBase: Rgb | null = null;
+		let xhighLighter: Rgb | null = null;
+
+		function resolveAnimColors(): void {
+			maxBase = extractRgb(theme.fg("thinkingMax", "\u2588"));
+			if (maxBase) maxHighlight = lightenRgb(maxBase, 0.65);
+
+			xhighBase = extractRgb(theme.fg("thinkingXhigh", "\u2588"));
+			if (xhighBase) xhighLighter = lightenRgb(xhighBase, 0.5);
+		}
+
+		function startAnimTimer(): void {
+			if (animTimer) return;
+			animTimer = setInterval(() => {
+				animFrame++;
+				requestRender();
+			}, ANIM_INTERVAL_MS);
+		}
+
+		function stopAnimTimer(): void {
+			if (animTimer) {
+				clearInterval(animTimer);
+				animTimer = null;
+			}
+		}
+
+		resolveAnimColors();
+
 		return {
 			dispose() {
 				unsub();
+				stopAnimTimer();
 			},
-			invalidate() {},
+			invalidate() {
+				// Re-resolve colors when theme changes
+				maxBase = null;
+				maxHighlight = null;
+				xhighBase = null;
+				xhighLighter = null;
+				resolveAnimColors();
+			},
 			render(width: number): string[] {
 				const sep = theme.fg("dim", " · ");
 				const groupSep = theme.fg("dim", " | ");
@@ -195,17 +301,39 @@ export function createFooterRenderer(
 						const thinking = formatThinkingLabel(thinkingLevel);
 						if (thinking) {
 							const thinkLabel = hasNerdFonts ? withIcon(iconThink, thinking) : thinking;
-							const thinkingColorMap: Record<string, string> = {
-								minimal: "thinkingMinimal",
-								low: "thinkingLow",
-								medium: "thinkingMedium",
-								high: "thinkingHigh",
-								xhigh: "thinkingXhigh",
-								max: "thinkingMax",
-							};
-							const thinkColor = thinkingColorMap[thinkingLevel] ?? "dim";
-							modelText += `${sep}${theme.fg(thinkColor, thinkLabel)}`;
+
+							// ── Animated or static thinking label ────────────────
+							let styledLabel: string;
+
+							if (thinkingLevel === "max" && maxBase && maxHighlight) {
+								startAnimTimer();
+								styledLabel = shimmerText(thinkLabel, animFrame, maxBase, maxHighlight);
+							} else if (thinkingLevel === "xhigh" && xhighBase && xhighLighter) {
+								startAnimTimer();
+								styledLabel = pulseText(thinkLabel, animFrame, xhighBase, xhighLighter);
+							} else {
+								// Static per-level color, stop animation timer if running
+								stopAnimTimer();
+								const thinkingColorMap: Record<string, string> = {
+									minimal: "thinkingMinimal",
+									low: "thinkingLow",
+									medium: "thinkingMedium",
+									high: "thinkingHigh",
+									xhigh: "thinkingXhigh",
+									max: "thinkingMax",
+								};
+								const thinkColor = thinkingColorMap[thinkingLevel] ?? "dim";
+								styledLabel = theme.fg(thinkColor, thinkLabel);
+							}
+
+							modelText += `${sep}${styledLabel}`;
+						} else {
+							// Thinking is off — stop animation
+							stopAnimTimer();
 						}
+					} else {
+						// No reasoning model — stop animation
+						stopAnimTimer();
 					}
 
 					// Append active agent mode after thinking label

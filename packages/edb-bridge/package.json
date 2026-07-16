@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-bridge",
-	"version": "0.16.1",
+	"version": "0.16.2",
 	"description": "Pi extension: lightweight inter-session message bus for orchestrator/sub-agent workflows",
 	"keywords": [
 		"pi-package",

@@ -47,6 +47,10 @@ describe("formatThinkingLabel", () => {
 		expect(formatThinkingLabel("xhigh")).toBe("XH");
 	});
 
+	it("returns MAX for max", () => {
+		expect(formatThinkingLabel("max")).toBe("MAX");
+	});
+
 	it("returns empty string for off", () => {
 		expect(formatThinkingLabel("off")).toBe("");
 	});
