@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.16.3] - 2026-07-21
 
 ### Changed
 - Increased `maxTokens` from 1024 to 32000 for more reliable session name generation from `opencode/big-pickle`
