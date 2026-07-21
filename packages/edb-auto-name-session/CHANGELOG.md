@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Increased `maxTokens` from 1024 to 32000 for more reliable session name generation from `opencode/big-pickle`
+- Added console warnings when model lookup or API key retrieval fails for easier debugging
+
 ## [0.16.0] - 2026-06-22
 
 ## [0.12.0] - 2026-05-22

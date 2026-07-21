@@ -87,10 +87,16 @@ export default function autoNameSessionExtension(pi: ExtensionAPI): void {
 
 async function generateSessionName(prompt: string, ctx: ExtensionContext): Promise<string | undefined> {
 	const model = ctx.modelRegistry.find(MODEL_PROVIDER, MODEL_ID);
-	if (!model) return undefined;
+	if (!model) {
+		console.warn("[edb-auto-name-session] Model not found:", `${MODEL_PROVIDER}/${MODEL_ID}`);
+		return undefined;
+	}
 
 	const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-	if (!auth.ok || !auth.apiKey) return undefined;
+	if (!auth.ok || !auth.apiKey) {
+		console.warn("[edb-auto-name-session] No API key for", MODEL_PROVIDER);
+		return undefined;
+	}
 
 	const response = await complete(
 		model,
@@ -107,7 +113,7 @@ async function generateSessionName(prompt: string, ctx: ExtensionContext): Promi
 		{
 			apiKey: auth.apiKey,
 			headers: auth.headers,
-			maxTokens: 1024,
+			maxTokens: 32000,
 		},
 	);
 
