@@ -78,7 +78,7 @@ interface SpawnOptions {
 	/** Called at the end of each agentic turn with the cumulative count. */
 	onTurnEnd?: (turnCount: number) => void;
 	/** Called once per assistant message_end with that message's usage delta. */
-	onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
+	onAssistantUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
 	/** Called when the session successfully compacts. */
 	onCompaction?: (info: CompactionInfo) => void;
 }
@@ -248,7 +248,7 @@ export class AgentManager {
 			},
 			onTurnEnd: options.onTurnEnd,
 			onTextDelta: options.onTextDelta,
-			onAssistantUsage: (usage: { input: number; output: number; cacheWrite: number }) => {
+			onAssistantUsage: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => {
 				addUsage(record.lifetimeUsage, usage);
 				options.onAssistantUsage?.(usage);
 			},

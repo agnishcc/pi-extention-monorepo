@@ -1,0 +1,28 @@
+{
+	"name": "@agnishc/edb-token-tracker",
+	"version": "0.1.0",
+	"description": "Pi extension: per-turn token usage tracker — captures main agent and subagent token usage to SQLite",
+	"keywords": ["pi-package", "pi-extension", "edb", "token-usage"],
+	"type": "module",
+	"license": "MIT",
+	"author": "Agnish Chakraborty",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/agnishcc/pi-extention-monorepo.git",
+		"directory": "packages/edb-token-tracker"
+	},
+	"homepage": "https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-token-tracker#readme",
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": ["src", "README.md", "LICENSE"],
+	"pi": {
+		"extensions": ["./src/index.ts"]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"dependencies": {
+		"sql.js": "^1.11.0"
+	}
+}

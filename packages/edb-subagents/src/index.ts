@@ -131,7 +131,7 @@ function createActivityTracker(maxTurns?: number, onStreamUpdate?: () => void) {
 		onSessionCreated: (session: any) => {
 			state.session = session;
 		},
-		onAssistantUsage: (usage: { input: number; output: number; cacheWrite: number }) => {
+		onAssistantUsage: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => {
 			addUsage(state.lifetimeUsage, usage);
 			onStreamUpdate?.();
 		},
@@ -1193,6 +1193,30 @@ Guidelines:
 						}
 					};
 
+					// Wrap onAssistantUsage to emit per-turn event for token tracking.
+					const origBgUsage = bgCallbacks.onAssistantUsage;
+					bgCallbacks.onAssistantUsage = (usage: {
+						input: number;
+						output: number;
+						cacheRead: number;
+						cacheWrite: number;
+					}) => {
+						origBgUsage(usage);
+						const modelStr = `${model?.provider}/${model?.id}`;
+						pi.events.emit("subagents:usage", {
+							agentId: id,
+							agentType: subagentType,
+							agentName,
+							model: modelStr,
+							turnNumber: bgState.turnCount + 1,
+							parentSessionId: bridgeSessionId,
+							input: usage.input,
+							output: usage.output,
+							cacheRead: usage.cacheRead,
+							cacheWrite: usage.cacheWrite,
+						});
+					};
+
 					try {
 						id = manager.spawn(pi, ctx, subagentType, params.prompt, {
 							description: params.description,
@@ -1328,6 +1352,30 @@ Guidelines:
 							break;
 						}
 					}
+				};
+
+				// Wrap onAssistantUsage to emit per-turn event for token tracking.
+				const origFgUsage = fgCallbacks.onAssistantUsage;
+				fgCallbacks.onAssistantUsage = (usage: {
+					input: number;
+					output: number;
+					cacheRead: number;
+					cacheWrite: number;
+				}) => {
+					origFgUsage(usage);
+					const modelStr = `${model?.provider}/${model?.id}`;
+					pi.events.emit("subagents:usage", {
+						agentId: fgId,
+						agentType: subagentType,
+						agentName,
+						model: modelStr,
+						turnNumber: fgState.turnCount + 1,
+						parentSessionId: bridgeSessionId,
+						input: usage.input,
+						output: usage.output,
+						cacheRead: usage.cacheRead,
+						cacheWrite: usage.cacheWrite,
+					});
 				};
 
 				// Animate spinner at 150ms (Claude Code–style 6-frame rotation)

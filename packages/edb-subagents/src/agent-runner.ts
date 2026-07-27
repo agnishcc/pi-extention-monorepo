@@ -167,7 +167,7 @@ export interface RunOptions {
 	 * Lets callers maintain a lifetime accumulator that survives compaction
 	 * (which replaces session.state.messages and resets stats-derived sums).
 	 */
-	onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
+	onAssistantUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
 	/**
 	 * Called when the session successfully compacts. `tokensBefore` is upstream's
 	 * pre-compaction context size estimate. Aborted compactions don't fire.
@@ -462,6 +462,7 @@ export async function runAgent(
 				options.onAssistantUsage?.({
 					input: u.input ?? 0,
 					output: u.output ?? 0,
+					cacheRead: u.cacheRead ?? 0,
 					cacheWrite: u.cacheWrite ?? 0,
 				});
 		}
@@ -502,7 +503,7 @@ export async function resumeAgent(
 	prompt: string,
 	options: {
 		onToolActivity?: (activity: ToolActivity) => void;
-		onAssistantUsage?: (usage: { input: number; output: number; cacheWrite: number }) => void;
+		onAssistantUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
 		onCompaction?: (info: { reason: "manual" | "threshold" | "overflow"; tokensBefore: number }) => void;
 		signal?: AbortSignal;
 	} = {},
@@ -523,6 +524,7 @@ export async function resumeAgent(
 							options.onAssistantUsage?.({
 								input: u.input ?? 0,
 								output: u.output ?? 0,
+								cacheRead: u.cacheRead ?? 0,
 								cacheWrite: u.cacheWrite ?? 0,
 							});
 					}
