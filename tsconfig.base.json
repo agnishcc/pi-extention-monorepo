@@ -12,7 +12,7 @@
 		"resolveJsonModule": true,
 
 		"noEmit": true,
-		"types": ["node"],
+		"types": ["node", "bun-types"],
 		"baseUrl": "."
 	},
 	"include": ["packages/*/**/*.ts", "test/**/*.ts", "vitest.config.ts"],

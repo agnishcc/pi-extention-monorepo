@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-token-tracker",
-	"version": "0.16.4",
+	"version": "0.16.5",
 	"description": "Pi extension: per-turn token usage tracker — captures main agent and subagent token usage to SQLite",
 	"keywords": [
 		"pi-package",
@@ -33,7 +33,5 @@
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*"
 	},
-	"dependencies": {
-		"sql.js": "^1.11.0"
-	}
+	"dependencies": {}
 }

@@ -4,8 +4,8 @@ import { formatReset, readPiAuth } from "./common";
 function loadCrofAiApiKey(): string | undefined {
 	// pi auth.json first
 	const auth = readPiAuth();
-	if (auth?.["crofai"]?.key) return auth["crofai"].key;
-	if (auth?.["crofai"]?.access) return auth["crofai"].access;
+	if (auth?.crofai?.key) return auth.crofai.key;
+	if (auth?.crofai?.access) return auth.crofai.access;
 
 	// Environment variable fallback
 	if (process.env.CROFAI_API_KEY) return process.env.CROFAI_API_KEY;

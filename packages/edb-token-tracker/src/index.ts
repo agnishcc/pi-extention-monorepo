@@ -6,19 +6,19 @@
  *
  * DB location: ~/.pi/token-usage.db
  *
- * Uses sql.js (WASM-based SQLite) to avoid native compilation issues.
- * The DB is loaded into memory on first write, modified, and saved back to disk.
+ * Uses bun:sqlite for native file locking and WAL-mode concurrency. This is
+ * safe under multiple parallel pi sessions — each writer waits its turn via
+ * busy_timeout instead of stomping the file with a full rewrite.
  *
  * Schema:
  *   token_detailed — append-only per-turn rows with session_id, model, caller, tokens
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { Database } from "bun:sqlite";
+import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { SqlJsDatabase, SqlJsStatic } from "sql.js";
-import initSqlJs from "sql.js";
 
 /** Subagent usage event payload from edb-subagents. */
 interface SubagentUsageEvent {
@@ -34,66 +34,71 @@ interface SubagentUsageEvent {
 	cacheWrite: number;
 }
 
-const DB_PATH = join(homedir(), ".pi", "token-usage.db");
+const DB_PATH = `${homedir()}/.pi/token-usage.db`;
 
-let db: SqlJsDatabase | null = null;
+let db: Database | null = null;
 let currentSessionId: string | undefined;
+/** The orchestrator's session ID — set on first session_start, never overwritten. */
+let mainSessionId: string | undefined;
 let mainTurnCount = 0;
 
-let sqlReady: ReturnType<typeof initSqlJs> | null = null;
-let sqlStatic: SqlJsStatic | null = null;
-
-async function getSql(): Promise<SqlJsStatic> {
-	if (sqlStatic) return sqlStatic;
-	if (!sqlReady) sqlReady = initSqlJs();
-	sqlStatic = await sqlReady;
-	return sqlStatic;
+/**
+ * bun:sqlite throws SQLITE_BUSY immediately rather than honouring busy_timeout
+ * for cross-process writes. With WAL + busy_timeout=5000 set per-connection,
+ * contention is rare — this retry is a backstop for the case where multiple pi
+ * sessions boot simultaneously and race on the initial schema setup.
+ */
+function withRetry<T>(fn: () => T, attempts = 20, baseMs = 25): T {
+	let lastErr: unknown;
+	for (let i = 0; i < attempts; i++) {
+		try {
+			return fn();
+		} catch (err: any) {
+			lastErr = err;
+			if (err?.code !== "SQLITE_BUSY") throw err;
+			const wait = baseMs * (1 << Math.min(i, 6)) + Math.random() * baseMs;
+			const end = Date.now() + wait;
+			while (Date.now() < end) {
+				/* spin */
+			}
+		}
+	}
+	throw lastErr;
 }
 
-/** Open (or create) the database. */
-async function openDb(): Promise<SqlJsDatabase> {
+/** Open (or create) the database with WAL mode and busy timeout. */
+function openDb(): Database {
 	if (db) return db;
-	const SQL = await getSql();
-	if (existsSync(DB_PATH)) {
-		const buffer = readFileSync(DB_PATH);
-		db = new SQL.Database(buffer);
-	} else {
+	if (!existsSync(dirname(DB_PATH))) {
 		mkdirSync(dirname(DB_PATH), { recursive: true });
-		db = new SQL.Database();
 	}
-	db.exec(`
-		CREATE TABLE IF NOT EXISTS token_detailed (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			timestamp   TEXT    NOT NULL,
-			session_id  TEXT    NOT NULL,
-			caller      TEXT    NOT NULL,
-			agent_id    TEXT,
-			agent_type  TEXT,
-			model       TEXT    NOT NULL,
-			turn_number INTEGER NOT NULL,
-			input_tokens    INTEGER NOT NULL,
-			output_tokens   INTEGER NOT NULL,
-			cache_read_tokens  INTEGER DEFAULT 0,
-			cache_write_tokens INTEGER DEFAULT 0
-		);
-		CREATE INDEX IF NOT EXISTS idx_detailed_session ON token_detailed(session_id);
-	`);
+	db = withRetry(() => new Database(DB_PATH, { create: true }));
+	withRetry(() => db!.run("PRAGMA journal_mode = WAL;"));
+	withRetry(() => db!.run("PRAGMA busy_timeout = 5000;"));
+	withRetry(() =>
+		db!.run(`
+			CREATE TABLE IF NOT EXISTS token_detailed (
+				id          INTEGER PRIMARY KEY AUTOINCREMENT,
+				timestamp   TEXT    NOT NULL,
+				session_id  TEXT    NOT NULL,
+				caller      TEXT    NOT NULL,
+				agent_id    TEXT,
+				agent_type  TEXT,
+				model       TEXT    NOT NULL,
+				turn_number INTEGER NOT NULL,
+				input_tokens    INTEGER NOT NULL,
+				output_tokens   INTEGER NOT NULL,
+				cache_read_tokens  INTEGER DEFAULT 0,
+				cache_write_tokens INTEGER DEFAULT 0
+			);
+		`),
+	);
+	withRetry(() => db!.run(`CREATE INDEX IF NOT EXISTS idx_detailed_session ON token_detailed(session_id);`));
 	return db;
 }
 
-/** Persist the in-memory DB to disk. */
-function saveDb(): void {
-	if (!db) return;
-	try {
-		const data = db.export();
-		writeFileSync(DB_PATH, Buffer.from(data));
-	} catch (err) {
-		console.error("[token-tracker] save error:", err);
-	}
-}
-
-/** Insert a single usage row and persist to disk. */
-async function insertRow(
+/** Insert a single usage row. Returns void; WAL handles durability. */
+function insertRow(
 	sessionId: string,
 	caller: "main" | "subagent",
 	model: string,
@@ -104,29 +109,30 @@ async function insertRow(
 	cacheWrite: number,
 	agentId?: string,
 	agentType?: string,
-): Promise<void> {
+): void {
 	try {
-		const d = await openDb();
-		d.run(
-			`INSERT INTO token_detailed
-				(timestamp, session_id, caller, agent_id, agent_type, model, turn_number,
-				 input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			[
-				new Date().toISOString(),
-				sessionId,
-				caller,
-				agentId ?? null,
-				agentType ?? null,
-				model,
-				turnNumber,
-				input,
-				output,
-				cacheRead,
-				cacheWrite,
-			],
+		const d = openDb();
+		withRetry(() =>
+			d.run(
+				`INSERT INTO token_detailed
+					(timestamp, session_id, caller, agent_id, agent_type, model, turn_number,
+					 input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				[
+					new Date().toISOString(),
+					sessionId,
+					caller,
+					agentId ?? null,
+					agentType ?? null,
+					model,
+					turnNumber,
+					input,
+					output,
+					cacheRead,
+					cacheWrite,
+				],
+			),
 		);
-		saveDb();
 	} catch (err) {
 		// Telemetry must never break the agent — swallow errors.
 		console.error("[token-tracker] write error:", err);
@@ -137,11 +143,18 @@ export default function (pi: ExtensionAPI) {
 	// ---- Session start: capture session ID, reset counters ----
 	pi.on("session_start", (_event, ctx: ExtensionContext) => {
 		currentSessionId = ctx.sessionManager?.getSessionId?.() ?? undefined;
+		// Track the first (orchestrator) session ID so we can distinguish
+		// sub-agent sessions from the main session.
+		if (!mainSessionId) mainSessionId = currentSessionId;
 		mainTurnCount = 0;
 	});
 
 	// ---- Main agent: per-turn token usage ----
 	pi.on("message_end", (_event, ctx: ExtensionContext) => {
+		// Only track the orchestrator session's assistant messages. Sub-agent
+		// sessions also fire message_end, but their usage is captured via the
+		// subagents:usage event to get proper caller/agent-id metadata.
+		if (currentSessionId !== mainSessionId) return;
 		if (_event.message.role !== "assistant") return;
 		const usage = (_event.message as any).usage;
 		if (!usage) return;
@@ -150,7 +163,6 @@ export default function (pi: ExtensionAPI) {
 		const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "unknown";
 		mainTurnCount++;
 
-		// Fire-and-forget: don't await — telemetry must not block agent.
 		insertRow(
 			sid,
 			"main",
@@ -168,9 +180,11 @@ export default function (pi: ExtensionAPI) {
 		const ev = payload as SubagentUsageEvent;
 		if (!ev || !ev.model) return;
 
-		const sid = ev.parentSessionId ?? currentSessionId ?? "unknown";
+		// Use parentSessionId from the event (bridge session ID), or fall back
+		// to the orchestrator's main session ID. Do NOT use currentSessionId
+		// which may have been overwritten by a sub-agent session_start.
+		const sid = ev.parentSessionId ?? mainSessionId ?? "unknown";
 
-		// Fire-and-forget: don't await.
 		insertRow(
 			sid,
 			"subagent",
@@ -185,18 +199,54 @@ export default function (pi: ExtensionAPI) {
 		);
 	});
 
+	// ---- CLI Command: /token-db viewer ----
+	pi.registerCommand("token-db", {
+		description: "View SQLite database token usage metrics and recent turn history",
+		handler: async (_args: string, ctx: ExtensionContext) => {
+			try {
+				const d = openDb();
+				const totals = d
+					.query<[number, number | null, number | null], []>(
+						"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens) FROM token_detailed",
+					)
+					.get();
+				const totalCount = totals?.[0] ?? 0;
+				const totalInput = Number(totals?.[1] ?? 0);
+				const totalOutput = Number(totals?.[2] ?? 0);
+
+				const recentRows = d
+					.query<[string, string, string, number, number, number], []>(
+						"SELECT timestamp, caller, model, turn_number, input_tokens, output_tokens FROM token_detailed ORDER BY id DESC LIMIT 5",
+					)
+					.all();
+
+				let out = `📊 Token Database Viewer (~/.pi/token-usage.db)\n\n`;
+				out += `• Total Recorded Turns: ${totalCount}\n`;
+				out += `• Total Input Tokens: ${totalInput.toLocaleString()}\n`;
+				out += `• Total Output Tokens: ${totalOutput.toLocaleString()}\n\n`;
+				out += `Recent Turns:\n`;
+
+				for (const r of recentRows) {
+					out += `• [${r[1]}] ${r[2]} (turn #${r[3]}) — in: ${r[4]}, out: ${r[5]}\n`;
+				}
+
+				ctx.ui.notify(out, "info");
+			} catch (err) {
+				ctx.ui.notify(`Failed to query database: ${err}`, "error");
+			}
+		},
+	});
+
 	// ---- Shutdown: close DB ----
 	pi.on("session_shutdown", () => {
 		try {
-			saveDb();
 			db?.close();
 		} catch {
 			// ignore
 		}
 		db = null;
-		sqlStatic = null;
-		sqlReady = null;
 		currentSessionId = undefined;
+		mainSessionId = undefined;
 		mainTurnCount = 0;
 	});
 }
