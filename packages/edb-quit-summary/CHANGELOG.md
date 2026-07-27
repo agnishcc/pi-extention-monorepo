@@ -2,7 +2,9 @@
 
 All notable changes to `@agnishc/edb-quit-summary` will be documented in this file.
 
-## [0.16.0] - 2026-06-22
+## [Unreleased]
+
+0.16.0] - 2026-06-22
 
 ## [0.14.0] - 2026-05-22
 
