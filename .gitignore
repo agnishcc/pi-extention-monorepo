@@ -29,3 +29,6 @@ coverage/
 
 # Local docs
 ai_docs/
+
+# Generated caches
+**/.catalog_cache.json
