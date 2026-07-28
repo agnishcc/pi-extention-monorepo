@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-quit-summary",
-	"version": "0.18.0",
+	"version": "0.18.2",
 	"description": "Pi extension: prints a session summary to the terminal when you hit /quit",
 	"keywords": [
 		"pi-package",
