@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.18.1] - 2026-07-28
+
+### Changed
+
+- Switch SQLite backend from `bun:sqlite` to `node:sqlite`. The extension now loads cleanly when pi runs under Node.js (no Bun runtime required). `node:sqlite` honours `busy_timeout` for cross-process writes, so the multi-session contention case is handled natively rather than via retry.
+
 ## [0.17.0] - 2026-07-27
 
 0.16.4] - 2026-07-27

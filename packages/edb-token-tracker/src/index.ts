@@ -6,7 +6,7 @@
  *
  * DB location: ~/.pi/token-usage.db
  *
- * Uses bun:sqlite for native file locking and WAL-mode concurrency. This is
+ * Uses node:sqlite for native file locking and WAL-mode concurrency. This is
  * safe under multiple parallel pi sessions — each writer waits its turn via
  * busy_timeout instead of stomping the file with a full rewrite.
  *
@@ -14,10 +14,10 @@
  *   token_detailed — append-only per-turn rows with session_id, model, caller, tokens
  */
 
-import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /** Subagent usage event payload from edb-subagents. */
@@ -36,17 +36,16 @@ interface SubagentUsageEvent {
 
 const DB_PATH = `${homedir()}/.pi/token-usage.db`;
 
-let db: Database | null = null;
+let db: DatabaseSync | null = null;
 let currentSessionId: string | undefined;
 /** The orchestrator's session ID — set on first session_start, never overwritten. */
 let mainSessionId: string | undefined;
 let mainTurnCount = 0;
 
 /**
- * bun:sqlite throws SQLITE_BUSY immediately rather than honouring busy_timeout
- * for cross-process writes. With WAL + busy_timeout=5000 set per-connection,
- * contention is rare — this retry is a backstop for the case where multiple pi
- * sessions boot simultaneously and race on the initial schema setup.
+ * node:sqlite honours busy_timeout for cross-process writes, so this retry is
+ * a defensive backstop for the case where multiple pi sessions boot
+ * simultaneously and race on the initial schema setup.
  */
 function withRetry<T>(fn: () => T, attempts = 20, baseMs = 25): T {
 	let lastErr: unknown;
@@ -67,33 +66,33 @@ function withRetry<T>(fn: () => T, attempts = 20, baseMs = 25): T {
 }
 
 /** Open (or create) the database with WAL mode and busy timeout. */
-function openDb(): Database {
+function openDb(): DatabaseSync {
 	if (db) return db;
 	if (!existsSync(dirname(DB_PATH))) {
 		mkdirSync(dirname(DB_PATH), { recursive: true });
 	}
-	db = withRetry(() => new Database(DB_PATH, { create: true }));
-	withRetry(() => db!.run("PRAGMA journal_mode = WAL;"));
-	withRetry(() => db!.run("PRAGMA busy_timeout = 5000;"));
+	db = withRetry(() => new DatabaseSync(DB_PATH));
+	withRetry(() => db!.exec("PRAGMA journal_mode = WAL;"));
+	withRetry(() => db!.exec("PRAGMA busy_timeout = 5000;"));
 	withRetry(() =>
-		db!.run(`
-			CREATE TABLE IF NOT EXISTS token_detailed (
-				id          INTEGER PRIMARY KEY AUTOINCREMENT,
-				timestamp   TEXT    NOT NULL,
-				session_id  TEXT    NOT NULL,
-				caller      TEXT    NOT NULL,
-				agent_id    TEXT,
-				agent_type  TEXT,
-				model       TEXT    NOT NULL,
-				turn_number INTEGER NOT NULL,
-				input_tokens    INTEGER NOT NULL,
-				output_tokens   INTEGER NOT NULL,
-				cache_read_tokens  INTEGER DEFAULT 0,
-				cache_write_tokens INTEGER DEFAULT 0
-			);
-		`),
+		db!.exec(`
+		CREATE TABLE IF NOT EXISTS token_detailed (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			timestamp   TEXT    NOT NULL,
+			session_id  TEXT    NOT NULL,
+			caller      TEXT    NOT NULL,
+			agent_id    TEXT,
+			agent_type  TEXT,
+			model       TEXT    NOT NULL,
+			turn_number INTEGER NOT NULL,
+			input_tokens    INTEGER NOT NULL,
+			output_tokens   INTEGER NOT NULL,
+			cache_read_tokens  INTEGER DEFAULT 0,
+			cache_write_tokens INTEGER DEFAULT 0
+		);
+	`),
 	);
-	withRetry(() => db!.run(`CREATE INDEX IF NOT EXISTS idx_detailed_session ON token_detailed(session_id);`));
+	withRetry(() => db!.exec(`CREATE INDEX IF NOT EXISTS idx_detailed_session ON token_detailed(session_id);`));
 	return db;
 }
 
@@ -113,12 +112,14 @@ function insertRow(
 	try {
 		const d = openDb();
 		withRetry(() =>
-			d.run(
-				`INSERT INTO token_detailed
-					(timestamp, session_id, caller, agent_id, agent_type, model, turn_number,
-					 input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				[
+			d
+				.prepare(
+					`INSERT INTO token_detailed
+				(timestamp, session_id, caller, agent_id, agent_type, model, turn_number,
+				 input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				)
+				.run(
 					new Date().toISOString(),
 					sessionId,
 					caller,
@@ -130,8 +131,7 @@ function insertRow(
 					output,
 					cacheRead,
 					cacheWrite,
-				],
-			),
+				),
 		);
 	} catch (err) {
 		// Telemetry must never break the agent — swallow errors.
@@ -206,19 +206,17 @@ export default function (pi: ExtensionAPI) {
 			try {
 				const d = openDb();
 				const totals = d
-					.query<[number, number | null, number | null], []>(
-						"SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens) FROM token_detailed",
-					)
-					.get();
+					.prepare("SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens) FROM token_detailed")
+					.get() as unknown as [number, number | null, number | null] | undefined;
 				const totalCount = totals?.[0] ?? 0;
 				const totalInput = Number(totals?.[1] ?? 0);
 				const totalOutput = Number(totals?.[2] ?? 0);
 
 				const recentRows = d
-					.query<[string, string, string, number, number, number], []>(
+					.prepare(
 						"SELECT timestamp, caller, model, turn_number, input_tokens, output_tokens FROM token_detailed ORDER BY id DESC LIMIT 5",
 					)
-					.all();
+					.all() as unknown as [string, string, string, number, number, number][];
 
 				let out = `📊 Token Database Viewer (~/.pi/token-usage.db)\n\n`;
 				out += `• Total Recorded Turns: ${totalCount}\n`;
