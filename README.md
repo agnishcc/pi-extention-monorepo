@@ -19,6 +19,7 @@ Monorepo for Pi CLI extensions published to npm under the `@agnishc/edb-*` famil
 | [`edb-herald`](packages/edb-herald) | `pi install npm:@agnishc/edb-herald` | Git commit and PR agent with explicit approval gates |
 | [`edb-session-manager`](packages/edb-session-manager) | `pi install npm:@agnishc/edb-session-manager` | Browse, resume, rename, and delete sessions with fuzzy search |
 | [`edb-todo`](packages/edb-todo) | `pi install npm:@agnishc/edb-todo` | Structured task list with live widget and system-prompt injection to prevent goal drift |
+| [`edb-token-tracker`](packages/edb-token-tracker) | `pi install npm:@agnishc/edb-token-tracker` | Per-turn main agent and subagent token usage tracking to Postgres |
 | [`edb-usage-stats`](packages/edb-usage-stats) | `pi install npm:@agnishc/edb-usage-stats` | `/usage` command showing token rates, reset timers, and live provider status |
 
 ## Development

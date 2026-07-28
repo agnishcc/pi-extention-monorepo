@@ -2,23 +2,18 @@
  * edb-token-tracker — Per-turn token usage tracker for pi.
  *
  * Captures token usage from both the main agent (via message_end events) and
- * subagents (via subagents:usage events from edb-subagents) into a local SQLite DB.
+ * subagents (via subagents:usage events from edb-subagents) into Postgres.
  *
- * DB location: ~/.pi/token-usage.db
+ * Default DB URL:
+ *   postgres://pi_token_tracker:pi_token_tracker@localhost:5432/pi_token_usage
  *
- * Uses node:sqlite for native file locking and WAL-mode concurrency. This is
- * safe under multiple parallel pi sessions — each writer waits its turn via
- * busy_timeout instead of stomping the file with a full rewrite.
- *
- * Schema:
- *   token_detailed — append-only per-turn rows with session_id, model, caller, tokens
+ * Override with PI_TOKEN_TRACKER_DATABASE_URL or DATABASE_URL.
  */
 
-import { existsSync, mkdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import pg from "pg";
+
+const { Pool } = pg;
 
 /** Subagent usage event payload from edb-subagents. */
 interface SubagentUsageEvent {
@@ -34,70 +29,64 @@ interface SubagentUsageEvent {
 	cacheWrite: number;
 }
 
-const DB_PATH = `${homedir()}/.pi/token-usage.db`;
+const DEFAULT_DATABASE_URL = "postgres://pi_token_tracker:pi_token_tracker@localhost:5432/pi_token_usage";
+const DATABASE_URL = process.env.PI_TOKEN_TRACKER_DATABASE_URL ?? process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
 
-let db: DatabaseSync | null = null;
+let pool: pg.Pool | null = null;
+let initPromise: Promise<void> | null = null;
 let currentSessionId: string | undefined;
 /** The orchestrator's session ID — set on first session_start, never overwritten. */
 let mainSessionId: string | undefined;
 let mainTurnCount = 0;
 
-/**
- * node:sqlite honours busy_timeout for cross-process writes, so this retry is
- * a defensive backstop for the case where multiple pi sessions boot
- * simultaneously and race on the initial schema setup.
- */
-function withRetry<T>(fn: () => T, attempts = 20, baseMs = 25): T {
-	let lastErr: unknown;
-	for (let i = 0; i < attempts; i++) {
-		try {
-			return fn();
-		} catch (err: any) {
-			lastErr = err;
-			if (err?.code !== "SQLITE_BUSY") throw err;
-			const wait = baseMs * (1 << Math.min(i, 6)) + Math.random() * baseMs;
-			const end = Date.now() + wait;
-			while (Date.now() < end) {
-				/* spin */
-			}
-		}
-	}
-	throw lastErr;
+function getPool(): pg.Pool {
+	if (pool) return pool;
+	pool = new Pool({
+		connectionString: DATABASE_URL,
+		application_name: "edb-token-tracker",
+		max: Number(process.env.PI_TOKEN_TRACKER_PG_POOL_MAX ?? 2),
+		idleTimeoutMillis: 30_000,
+		connectionTimeoutMillis: 5_000,
+	});
+	pool.on("error", (err) => {
+		console.error("[token-tracker] postgres pool error:", err);
+	});
+	return pool;
 }
 
-/** Open (or create) the database with WAL mode and busy timeout. */
-function openDb(): DatabaseSync {
-	if (db) return db;
-	if (!existsSync(dirname(DB_PATH))) {
-		mkdirSync(dirname(DB_PATH), { recursive: true });
-	}
-	db = withRetry(() => new DatabaseSync(DB_PATH));
-	withRetry(() => db!.exec("PRAGMA journal_mode = WAL;"));
-	withRetry(() => db!.exec("PRAGMA busy_timeout = 5000;"));
-	withRetry(() =>
-		db!.exec(`
-		CREATE TABLE IF NOT EXISTS token_detailed (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			timestamp   TEXT    NOT NULL,
-			session_id  TEXT    NOT NULL,
-			caller      TEXT    NOT NULL,
-			agent_id    TEXT,
-			agent_type  TEXT,
-			model       TEXT    NOT NULL,
-			turn_number INTEGER NOT NULL,
-			input_tokens    INTEGER NOT NULL,
-			output_tokens   INTEGER NOT NULL,
-			cache_read_tokens  INTEGER DEFAULT 0,
-			cache_write_tokens INTEGER DEFAULT 0
-		);
-	`),
-	);
-	withRetry(() => db!.exec(`CREATE INDEX IF NOT EXISTS idx_detailed_session ON token_detailed(session_id);`));
-	return db;
+async function initSchema(): Promise<void> {
+	if (initPromise) return initPromise;
+	initPromise = (async () => {
+		const p = getPool();
+		await p.query(`
+			CREATE TABLE IF NOT EXISTS token_detailed (
+				id BIGSERIAL PRIMARY KEY,
+				timestamp TEXT NOT NULL,
+				session_id TEXT NOT NULL,
+				caller TEXT NOT NULL,
+				agent_id TEXT,
+				agent_type TEXT,
+				model TEXT NOT NULL,
+				turn_number INTEGER NOT NULL,
+				input_tokens INTEGER NOT NULL,
+				output_tokens INTEGER NOT NULL,
+				cache_read_tokens INTEGER DEFAULT 0,
+				cache_write_tokens INTEGER DEFAULT 0
+			);
+		`);
+		await p.query("CREATE INDEX IF NOT EXISTS idx_token_detailed_session ON token_detailed(session_id);");
+		await p.query("CREATE INDEX IF NOT EXISTS idx_token_detailed_model ON token_detailed(model);");
+		await p.query("CREATE INDEX IF NOT EXISTS idx_token_detailed_timestamp ON token_detailed(timestamp);");
+		await p.query("CREATE INDEX IF NOT EXISTS idx_token_detailed_caller ON token_detailed(caller);");
+	})().catch((err) => {
+		initPromise = null;
+		throw err;
+	});
+	return initPromise;
 }
 
-/** Insert a single usage row. Returns void; WAL handles durability. */
-function insertRow(
+/** Insert a single usage row. Telemetry failures must never break the agent. */
+async function insertRow(
 	sessionId: string,
 	caller: "main" | "subagent",
 	model: string,
@@ -108,34 +97,30 @@ function insertRow(
 	cacheWrite: number,
 	agentId?: string,
 	agentType?: string,
-): void {
+): Promise<void> {
 	try {
-		const d = openDb();
-		withRetry(() =>
-			d
-				.prepare(
-					`INSERT INTO token_detailed
+		await initSchema();
+		await getPool().query(
+			`INSERT INTO token_detailed
 				(timestamp, session_id, caller, agent_id, agent_type, model, turn_number,
 				 input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				)
-				.run(
-					new Date().toISOString(),
-					sessionId,
-					caller,
-					agentId ?? null,
-					agentType ?? null,
-					model,
-					turnNumber,
-					input,
-					output,
-					cacheRead,
-					cacheWrite,
-				),
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+			[
+				new Date().toISOString(),
+				sessionId,
+				caller,
+				agentId ?? null,
+				agentType ?? null,
+				model,
+				turnNumber,
+				input,
+				output,
+				cacheRead,
+				cacheWrite,
+			],
 		);
 	} catch (err) {
-		// Telemetry must never break the agent — swallow errors.
-		console.error("[token-tracker] write error:", err);
+		console.error("[token-tracker] postgres write error:", err);
 	}
 }
 
@@ -147,6 +132,7 @@ export default function (pi: ExtensionAPI) {
 		// sub-agent sessions from the main session.
 		if (!mainSessionId) mainSessionId = currentSessionId;
 		mainTurnCount = 0;
+		void initSchema();
 	});
 
 	// ---- Main agent: per-turn token usage ----
@@ -163,7 +149,7 @@ export default function (pi: ExtensionAPI) {
 		const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "unknown";
 		mainTurnCount++;
 
-		insertRow(
+		void insertRow(
 			sid,
 			"main",
 			model,
@@ -185,7 +171,7 @@ export default function (pi: ExtensionAPI) {
 		// which may have been overwritten by a sub-agent session_start.
 		const sid = ev.parentSessionId ?? mainSessionId ?? "unknown";
 
-		insertRow(
+		void insertRow(
 			sid,
 			"subagent",
 			ev.model,
@@ -201,50 +187,62 @@ export default function (pi: ExtensionAPI) {
 
 	// ---- CLI Command: /token-db viewer ----
 	pi.registerCommand("token-db", {
-		description: "View SQLite database token usage metrics and recent turn history",
+		description: "View Postgres token usage metrics and recent turn history",
 		handler: async (_args: string, ctx: ExtensionContext) => {
 			try {
-				const d = openDb();
-				const totals = d
-					.prepare("SELECT COUNT(*), SUM(input_tokens), SUM(output_tokens) FROM token_detailed")
-					.get() as unknown as [number, number | null, number | null] | undefined;
-				const totalCount = totals?.[0] ?? 0;
-				const totalInput = Number(totals?.[1] ?? 0);
-				const totalOutput = Number(totals?.[2] ?? 0);
+				await initSchema();
+				const totals = await getPool().query<{
+					count: string;
+					input_sum: string | null;
+					output_sum: string | null;
+				}>(
+					"SELECT COUNT(*) AS count, SUM(input_tokens) AS input_sum, SUM(output_tokens) AS output_sum FROM token_detailed",
+				);
+				const totalCount = Number(totals.rows[0]?.count ?? 0);
+				const totalInput = Number(totals.rows[0]?.input_sum ?? 0);
+				const totalOutput = Number(totals.rows[0]?.output_sum ?? 0);
 
-				const recentRows = d
-					.prepare(
-						"SELECT timestamp, caller, model, turn_number, input_tokens, output_tokens FROM token_detailed ORDER BY id DESC LIMIT 5",
-					)
-					.all() as unknown as [string, string, string, number, number, number][];
+				const recentRows = await getPool().query<{
+					timestamp: string;
+					caller: string;
+					model: string;
+					turn_number: number;
+					input_tokens: number;
+					output_tokens: number;
+				}>(
+					"SELECT timestamp, caller, model, turn_number, input_tokens, output_tokens FROM token_detailed ORDER BY id DESC LIMIT 5",
+				);
 
-				let out = `📊 Token Database Viewer (~/.pi/token-usage.db)\n\n`;
+				let out = `📊 Token Database Viewer (Postgres)\n\n`;
 				out += `• Total Recorded Turns: ${totalCount}\n`;
 				out += `• Total Input Tokens: ${totalInput.toLocaleString()}\n`;
 				out += `• Total Output Tokens: ${totalOutput.toLocaleString()}\n\n`;
 				out += `Recent Turns:\n`;
 
-				for (const r of recentRows) {
-					out += `• [${r[1]}] ${r[2]} (turn #${r[3]}) — in: ${r[4]}, out: ${r[5]}\n`;
+				for (const r of recentRows.rows) {
+					out += `• [${r.caller}] ${r.model} (turn #${r.turn_number}) — in: ${r.input_tokens}, out: ${r.output_tokens}\n`;
 				}
 
 				ctx.ui.notify(out, "info");
 			} catch (err) {
-				ctx.ui.notify(`Failed to query database: ${err}`, "error");
+				ctx.ui.notify(`Failed to query Postgres token database: ${err}`, "error");
 			}
 		},
 	});
 
-	// ---- Shutdown: close DB ----
+	// ---- Shutdown: close DB pool ----
 	pi.on("session_shutdown", () => {
-		try {
-			db?.close();
-		} catch {
-			// ignore
-		}
-		db = null;
-		currentSessionId = undefined;
-		mainSessionId = undefined;
-		mainTurnCount = 0;
+		void (async () => {
+			try {
+				await pool?.end();
+			} catch {
+				// ignore
+			}
+			pool = null;
+			initPromise = null;
+			currentSessionId = undefined;
+			mainSessionId = undefined;
+			mainTurnCount = 0;
+		})();
 	});
 }

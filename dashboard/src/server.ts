@@ -1,7 +1,7 @@
 import { loadCatalog } from './pricing';
 import { DatabaseManager } from './db';
 import { readSessionTranscript, getAvailableSessionIds } from './sessionsReader';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -16,10 +16,11 @@ async function startServer() {
 
   // Load Database
   const dbManager = new DatabaseManager(catalog);
-  console.log('  Connected to SQLite token-usage.db');
+  await dbManager.ready();
+  console.log('  Connected to Postgres token usage database');
 
   // Auto ingest historic sessions
-  dbManager.autoIngestHistoricSessions();
+  await dbManager.autoIngestHistoricSessions();
 
   const server = Bun.serve({
     port: PORT,
@@ -41,19 +42,19 @@ async function startServer() {
       // API Endpoints
       if (path === '/api/summary') {
         const timeframe = (url.searchParams.get('timeframe') as any) || 'all';
-        return Response.json(dbManager.getSummary(timeframe), { headers: corsHeaders });
+        return Response.json(await dbManager.getSummary(timeframe), { headers: corsHeaders });
       }
 
       if (path === '/api/models/top') {
         const by = (url.searchParams.get('by') as any) || 'cost';
         const limit = parseInt(url.searchParams.get('limit') || '5', 10);
         const timeframe = (url.searchParams.get('timeframe') as any) || 'all';
-        return Response.json(dbManager.getTopModels(by, limit, timeframe), { headers: corsHeaders });
+        return Response.json(await dbManager.getTopModels(by, limit, timeframe), { headers: corsHeaders });
       }
 
       if (path === '/api/timeline') {
         const unit = (url.searchParams.get('unit') as any) || 'daily';
-        return Response.json(dbManager.getTimeline(unit), { headers: corsHeaders });
+        return Response.json(await dbManager.getTimeline(unit), { headers: corsHeaders });
       }
 
       if (path === '/api/subscriptions' || path.startsWith('/api/subscriptions/')) {
@@ -62,7 +63,7 @@ async function startServer() {
             const body = (await req.json()) as any;
             const { providerId, cost, cycle = 'monthly' } = body;
             if (providerId && typeof cost === 'number') {
-              dbManager.addSubscription(providerId, cost, cycle);
+              await dbManager.addSubscription(providerId, cost, cycle);
               return Response.json({ success: true }, { headers: corsHeaders });
             }
             return Response.json({ error: 'Missing providerId or cost' }, { status: 400, headers: corsHeaders });
@@ -75,17 +76,17 @@ async function startServer() {
           const parts = path.split('/');
           const pid = parts[3] || url.searchParams.get('providerId');
           if (pid) {
-            dbManager.removeSubscription(pid);
+            await dbManager.removeSubscription(pid);
             return Response.json({ success: true }, { headers: corsHeaders });
           }
           return Response.json({ error: 'Missing providerId' }, { status: 400, headers: corsHeaders });
         }
 
-        return Response.json(dbManager.getSubscriptions(), { headers: corsHeaders });
+        return Response.json(await dbManager.getSubscriptions(), { headers: corsHeaders });
       }
 
       if (path === '/api/db/stats') {
-        return Response.json(dbManager.getDbStats(), { headers: corsHeaders });
+        return Response.json(await dbManager.getDbStats(), { headers: corsHeaders });
       }
 
       if (path === '/api/db/rows') {
@@ -98,7 +99,7 @@ async function startServer() {
         const sortOrder = (url.searchParams.get('sortOrder') as any) || 'desc';
 
         return Response.json(
-          dbManager.getDbRows(limit, offset, search, model, caller, sortColumn, sortOrder),
+          await dbManager.getDbRows(limit, offset, search, model, caller, sortColumn, sortOrder),
           { headers: corsHeaders }
         );
       }
@@ -107,7 +108,7 @@ async function startServer() {
         try {
           const body = (await req.json()) as any;
           const sql = body?.sql || '';
-          return Response.json(dbManager.executeReadOnlySql(sql), { headers: corsHeaders });
+          return Response.json(await dbManager.executeReadOnlySql(sql), { headers: corsHeaders });
         } catch (err: any) {
           return Response.json({ error: err?.message || String(err) }, { status: 400, headers: corsHeaders });
         }
@@ -116,19 +117,19 @@ async function startServer() {
       if (path === '/api/db/action' && req.method === 'POST') {
         try {
           const body = (await req.json()) as any;
-          const action = body?.action as 'vacuum' | 'reindex';
-          return Response.json(dbManager.performDbAction(action), { headers: corsHeaders });
+          const action = body?.action as 'vacuum' | 'reindex' | 'analyze';
+          return Response.json(await dbManager.performDbAction(action), { headers: corsHeaders });
         } catch (err: any) {
           return Response.json({ error: err?.message || String(err) }, { status: 400, headers: corsHeaders });
         }
       }
 
       if (path === '/api/providers/all') {
-        return Response.json(dbManager.getAllCatalogProviders(), { headers: corsHeaders });
+        return Response.json(await dbManager.getAllCatalogProviders(), { headers: corsHeaders });
       }
 
       if (path === '/api/providers') {
-        return Response.json(dbManager.getProviders(), { headers: corsHeaders });
+        return Response.json(await dbManager.getProviders(), { headers: corsHeaders });
       }
 
       if (path === '/api/catalog/search') {
@@ -139,12 +140,12 @@ async function startServer() {
       }
 
       if (path === '/api/models/cross-provider') {
-        return Response.json(dbManager.getCrossProviderModels(), { headers: corsHeaders });
+        return Response.json(await dbManager.getCrossProviderModels(), { headers: corsHeaders });
       }
 
       if (path === '/api/models') {
         const provider = url.searchParams.get('provider') || undefined;
-        return Response.json(dbManager.getModels(provider), { headers: corsHeaders });
+        return Response.json(await dbManager.getModels(provider), { headers: corsHeaders });
       }
 
       if (path === '/api/sessions') {
@@ -154,11 +155,11 @@ async function startServer() {
         // Walk ~/.pi/agent/sessions once per request so the list can flag rows
         // whose transcript JSONL is missing or has been pruned.
         const availableIds = getAvailableSessionIds();
-        return Response.json(dbManager.getSessions(page, limit, search, '', availableIds), { headers: corsHeaders });
+        return Response.json(await dbManager.getSessions(page, limit, search, '', availableIds), { headers: corsHeaders });
       }
 
       if (path === '/api/export/sessions') {
-        const sessionsData = dbManager.getSessions(1, 10000);
+        const sessionsData = await dbManager.getSessions(1, 10000);
         let csv = 'Session ID,First Turn,Last Turn,Turns,Input Tokens,Output Tokens,Cache Read Tokens,Cost ($)\n';
         for (const s of sessionsData.items) {
           csv += `"${s.sessionId}","${s.firstTurn}","${s.lastTurn}",${s.turnCount},${s.inputTokens},${s.outputTokens},${s.cacheReadTokens},${s.totalCost}\n`;
@@ -173,7 +174,7 @@ async function startServer() {
       }
 
       if (path === '/api/export/models') {
-        const modelsData = dbManager.getModels();
+        const modelsData = await dbManager.getModels();
         let csv = 'Model,Provider,Turns,Sessions,Input Tokens,Output Tokens,Cache Read Tokens,Cost ($)\n';
         for (const m of modelsData) {
           csv += `"${m.model}","${m.providerName}",${m.turns},${m.sessionsCount},${m.inputTokens},${m.outputTokens},${m.cacheReadTokens},${m.totalCost}\n`;
@@ -188,10 +189,10 @@ async function startServer() {
       }
 
       if (path === '/api/export/analytics') {
-        const summary = dbManager.getSummary('all');
-        const timeline = dbManager.getTimeline('daily');
-        const models = dbManager.getModels();
-        const providers = dbManager.getProviders();
+        const summary = await dbManager.getSummary('all');
+        const timeline = await dbManager.getTimeline('daily');
+        const models = await dbManager.getModels();
+        const providers = await dbManager.getProviders();
         return Response.json({ summary, timeline, models, providers }, { headers: corsHeaders });
       }
 

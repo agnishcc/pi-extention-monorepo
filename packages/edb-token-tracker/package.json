@@ -33,5 +33,7 @@
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*"
 	},
-	"dependencies": {}
+	"dependencies": {
+		"pg": "^8.13.1"
+	}
 }

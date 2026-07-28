@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Replace the shared SQLite write target with Postgres for reliable concurrent token usage writes.
+- Add Postgres-backed `/token-db` metrics and schema initialization.
+
 ## [0.18.1] - 2026-07-28
 
 ### Changed

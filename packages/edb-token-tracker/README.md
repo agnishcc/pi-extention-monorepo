@@ -1,6 +1,6 @@
 # @agnishc/edb-token-tracker
 
-Pi extension that tracks per-turn LLM token usage for both the main agent and subagents, writing to a local SQLite database at `~/.pi/token-usage.db`.
+Pi extension that tracks per-turn LLM token usage for both the main agent and subagents, writing to Postgres.
 
 Designed to work alongside [`@agnishc/edb-subagents`](https://github.com/agnishcc/pi-extention-monorepo/tree/main/packages/edb-subagents).
 
@@ -16,6 +16,38 @@ Or load directly in the monorepo:
 pi -e ./packages/edb-token-tracker/src/index.ts
 ```
 
+## Database
+
+Default connection URL:
+
+```text
+postgres://pi_token_tracker:pi_token_tracker@localhost:5432/pi_token_usage
+```
+
+Override with either:
+
+```bash
+export PI_TOKEN_TRACKER_DATABASE_URL='postgres://user:pass@host:5432/dbname'
+# or
+export DATABASE_URL='postgres://user:pass@host:5432/dbname'
+```
+
+For local development from the repo root:
+
+```bash
+docker compose -f docker-compose.postgres.yml --env-file .env up -d
+```
+
+Use `.env.example` as the starting point for `.env`.
+
+To migrate existing rows from the old SQLite DB:
+
+```bash
+npm run migrate:token-postgres
+```
+
+The migration reads `~/.pi/token-usage.db` by default and skips rows already present in Postgres.
+
 ## How it works
 
 | Source | Event | What's captured |
@@ -27,7 +59,7 @@ pi -e ./packages/edb-token-tracker/src/index.ts
 
 ```sql
 CREATE TABLE token_detailed (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    id          BIGSERIAL PRIMARY KEY,
     timestamp   TEXT    NOT NULL,                  -- ISO 8601
     session_id  TEXT    NOT NULL,                  -- pi session ID
     caller      TEXT    NOT NULL,                  -- "main" | "subagent"
@@ -61,10 +93,18 @@ FROM token_detailed WHERE caller = 'subagent'
 GROUP BY agent_type;
 ```
 
+## CLI command
+
+```text
+/token-db
+```
+
+Shows total recorded turns, input/output totals, and recent turn history from Postgres.
+
 ## Requirements
 
-- `@agnishc/edb-subagents` v0.16+ (for `subagents:usage` events)
-- Uses `sql.js` (WASM-based SQLite) — no native compilation needed
+- A reachable Postgres database
+- `@agnishc/edb-subagents` v0.16+ for `subagents:usage` events
 
 ## License
 

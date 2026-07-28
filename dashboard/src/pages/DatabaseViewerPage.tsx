@@ -152,9 +152,9 @@ export const DatabaseViewerPage: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white tracking-tight">SQLite Database Viewer</h1>
+              <h1 className="text-lg font-bold text-white tracking-tight">Postgres Database Viewer</h1>
               <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Native Bun:SQLite
+                <CheckCircle2 className="w-3 h-3" /> PostgreSQL
               </span>
             </div>
             <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -419,7 +419,7 @@ export const DatabaseViewerPage: React.FC = () => {
               <label className="text-xs font-mono font-bold text-slate-300 flex items-center gap-2">
                 <FileCode className="w-4 h-4 text-indigo-400" /> Read-Only SQL Query Console
               </label>
-              <span className="text-[10px] font-mono text-slate-500">Only SELECT / PRAGMA queries allowed</span>
+              <span className="text-[10px] font-mono text-slate-500">Only SELECT / EXPLAIN / SHOW queries allowed</span>
             </div>
 
             {/* Pre-made Query Templates */}
@@ -450,7 +450,7 @@ export const DatabaseViewerPage: React.FC = () => {
               <button
                 onClick={() =>
                   setSqlQuery(
-                    'SELECT strftime("%Y-%m-%d %H:00", timestamp) as hour, SUM(output_tokens) as hourly_output FROM token_detailed GROUP BY hour ORDER BY hour DESC LIMIT 24;'
+                    "SELECT date_trunc('hour', timestamp::timestamptz) as hour, SUM(output_tokens) as hourly_output FROM token_detailed GROUP BY hour ORDER BY hour DESC LIMIT 24;"
                   )
                 }
                 className="px-2.5 py-1 rounded bg-[#1E202A] border border-[#2A2C3A] text-slate-300 hover:text-white hover:border-indigo-500 transition-all font-mono text-[11px]"
@@ -459,7 +459,7 @@ export const DatabaseViewerPage: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setSqlQuery('PRAGMA table_info(token_detailed);')}
+                onClick={() => setSqlQuery("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'token_detailed' ORDER BY ordinal_position;")}
                 className="px-2.5 py-1 rounded bg-[#1E202A] border border-[#2A2C3A] text-slate-300 hover:text-white hover:border-indigo-500 transition-all font-mono text-[11px]"
               >
                 Schema Info
@@ -544,22 +544,22 @@ export const DatabaseViewerPage: React.FC = () => {
             <div className="bg-[#141519] border border-[#23252E] rounded-xl p-5 space-y-4">
               <div className="flex items-center gap-2 text-slate-200 font-bold text-sm">
                 <HardDrive className="w-4 h-4 text-indigo-400" />
-                SQLite File & Memory Metrics
+                Postgres Storage Metrics
               </div>
 
               <div className="space-y-2 text-xs font-mono">
                 <div className="flex justify-between py-1.5 border-b border-[#1E202A]">
-                  <span className="text-slate-400">Database File:</span>
+                  <span className="text-slate-400">Database URL:</span>
                   <span className="text-slate-200 truncate max-w-[200px]" title={stats?.dbPath}>
                     {stats?.dbPath}
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-[#1E202A]">
-                  <span className="text-slate-400">File Size:</span>
+                  <span className="text-slate-400">Database Size:</span>
                   <span className="text-emerald-400 font-bold">{stats?.fileSizeFormatted}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-[#1E202A]">
-                  <span className="text-slate-400">Journal Mode:</span>
+                  <span className="text-slate-400">Backend:</span>
                   <span className="text-indigo-400 uppercase font-bold">{stats?.journalMode}</span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-[#1E202A]">
@@ -581,7 +581,7 @@ export const DatabaseViewerPage: React.FC = () => {
               </div>
 
               <p className="text-xs text-slate-400 leading-relaxed">
-                Run optimization and index maintenance directly on the active SQLite database to compact disk storage and rebuild index trees.
+                Run lightweight Postgres maintenance against the active token usage tables to refresh statistics and rebuild index trees.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -591,7 +591,7 @@ export const DatabaseViewerPage: React.FC = () => {
                   className="flex-1 bg-[#1E202A] hover:bg-[#282B38] border border-[#2F3244] text-white text-xs font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${actionLoading ? 'animate-spin' : ''}`} />
-                  VACUUM (Defrag)
+                  VACUUM
                 </button>
 
                 <button
@@ -600,7 +600,7 @@ export const DatabaseViewerPage: React.FC = () => {
                   className="flex-1 bg-[#1E202A] hover:bg-[#282B38] border border-[#2F3244] text-white text-xs font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all"
                 >
                   <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                  REINDEX (Rebuild)
+                  REINDEX
                 </button>
               </div>
 

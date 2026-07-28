@@ -14,6 +14,7 @@
   "dependencies": {
     "clsx": "^2.1.1",
     "lucide-react": "^0.469.0",
+    "pg": "^8.13.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.15.0",
