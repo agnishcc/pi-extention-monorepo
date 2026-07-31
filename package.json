@@ -25,9 +25,9 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.5",
-		"@earendil-works/pi-ai": "^0.74.0",
-		"@earendil-works/pi-coding-agent": "^0.74.0",
-		"@earendil-works/pi-tui": "^0.74.0",
+		"@earendil-works/pi-ai": "^0.83.0",
+		"@earendil-works/pi-coding-agent": "^0.83.0",
+		"@earendil-works/pi-tui": "^0.83.0",
 		"@types/node": "^22.10.5",
 		"@types/pg": "^8.11.10",
 		"@vitest/coverage-v8": "^4.0.0",
@@ -40,6 +40,6 @@
 		"vitest": "^4.0.0"
 	},
 	"engines": {
-		"node": ">=20.0.0"
+		"node": ">=22.19.0"
 	}
 }

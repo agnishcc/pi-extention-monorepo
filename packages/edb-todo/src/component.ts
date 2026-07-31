@@ -12,6 +12,7 @@ import type { TodoConfig } from "./config.js";
 import { saveTodoConfig } from "./config.js";
 import type { FileTaskStore } from "./file-store.js";
 import { priorityColor, priorityLabel, renderTaskListResult } from "./state.js";
+import type { TaskService } from "./task-service.js";
 import type { Task, TaskDetails } from "./types.js";
 import { PRIORITY_ORDER } from "./types.js";
 
@@ -111,6 +112,7 @@ export class TodoViewComponent {
 				.filter((t) => t.status === "pending")
 				.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
 			const done = this.tasks.filter((t) => t.status === "completed");
+			const attention = this.tasks.filter((t) => ["blocked", "failed", "cancelled"].includes(t.status));
 
 			let flatIdx = 0;
 
@@ -133,6 +135,20 @@ export class TodoViewComponent {
 					truncateToWidth(`  ${th.fg("muted", th.bold("Pending"))} ${th.fg("dim", `(${pending.length})`)}`, width),
 				);
 				for (const t of pending) {
+					lines.push(...this.renderTask(t, width, flatIdx));
+					flatIdx++;
+				}
+				lines.push("");
+			}
+
+			if (attention.length > 0) {
+				lines.push(
+					truncateToWidth(
+						`  ${th.fg("warning", th.bold("Needs Attention"))} ${th.fg("dim", `(${attention.length})`)}`,
+						width,
+					),
+				);
+				for (const t of attention) {
 					lines.push(...this.renderTask(t, width, flatIdx));
 					flatIdx++;
 				}
@@ -174,6 +190,12 @@ export class TodoViewComponent {
 			icon = th.fg("success", "✓");
 		} else if (task.status === "in_progress") {
 			icon = th.fg("accent", "●");
+		} else if (task.status === "blocked") {
+			icon = th.fg("warning", "⏸");
+		} else if (task.status === "failed") {
+			icon = th.fg("error", "✗");
+		} else if (task.status === "cancelled") {
+			icon = th.fg("dim", "⊘");
 		} else {
 			icon = th.fg("dim", "○");
 		}
@@ -186,6 +208,10 @@ export class TodoViewComponent {
 			contentText = th.fg("dim", th.strikethrough(task.content));
 		} else if (task.status === "in_progress") {
 			contentText = th.fg("text", th.bold(task.content));
+		} else if (task.status === "failed") {
+			contentText = th.fg("error", task.content);
+		} else if (task.status === "blocked") {
+			contentText = th.fg("warning", task.content);
 		} else {
 			contentText = th.fg("muted", task.content);
 		}
@@ -218,7 +244,8 @@ export class TodoViewComponent {
 			.filter((t) => t.status === "pending")
 			.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
 		const done = this.showCompleted ? this.tasks.filter((t) => t.status === "completed") : [];
-		this.flatTasks = [...inProgress, ...pending, ...done];
+		const attention = this.tasks.filter((t) => ["blocked", "failed", "cancelled"].includes(t.status));
+		this.flatTasks = [...inProgress, ...pending, ...attention, ...done];
 	}
 
 	invalidate(): void {
@@ -298,6 +325,7 @@ export async function openTodoSettings(ui: any, cfg: TodoConfig, cwd: string, cl
 export async function openTodosMenu(
 	ui: any,
 	store: FileTaskStore,
+	service: TaskService,
 	cfg: TodoConfig,
 	cwd: string,
 	onTaskUpdate: (taskId: string, status?: string) => void,
@@ -319,12 +347,12 @@ export async function openTodosMenu(
 		if (choice.startsWith("View")) {
 			return viewTasks();
 		} else if (choice.startsWith("Clear completed")) {
-			store.clearCompleted();
+			await service.clearCompleted({ agentId: "root", runId: null });
 			store.deleteFileIfEmpty();
 			onTaskUpdate("", undefined);
 			return mainMenu();
 		} else if (choice.startsWith("Clear all")) {
-			store.clearAll();
+			await service.clearAll({ agentId: "root", runId: null });
 			store.deleteFileIfEmpty();
 			onTaskUpdate("", undefined);
 			return mainMenu();
@@ -383,15 +411,15 @@ export async function openTodosMenu(
 		const action = await ui.select(detailLines, actions);
 
 		if (action === "▸ Start (in_progress)") {
-			store.update(taskId, { status: "in_progress" });
+			await service.applyUpdate(taskId, { status: "in_progress" }, { agentId: "root", runId: null });
 			onTaskUpdate(taskId, "in_progress");
 			return viewTasks();
 		} else if (action === "✓ Complete") {
-			store.update(taskId, { status: "completed" });
+			await service.applyUpdate(taskId, { status: "completed" }, { agentId: "root", runId: null });
 			onTaskUpdate(taskId, "completed");
 			return viewTasks();
 		} else if (action === "✗ Delete") {
-			store.update(taskId, { status: "deleted" });
+			await service.applyUpdate(taskId, { status: "deleted" }, { agentId: "root", runId: null });
 			onTaskUpdate(taskId, "deleted");
 			return viewTasks();
 		}

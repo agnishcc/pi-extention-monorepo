@@ -97,13 +97,13 @@ export const TodoGetParams = Type.Object({
 export const TodoUpdateParams = Type.Object({
 	id: Type.String({ description: "The ID of the task to update." }),
 	status: Type.Optional(
-		Type.Unsafe<"pending" | "in_progress" | "completed" | "blocked" | "failed" | "deleted">({
+		Type.Unsafe<"pending" | "in_progress" | "completed" | "blocked" | "failed" | "cancelled" | "deleted">({
 			type: "string",
-			enum: ["pending", "in_progress", "completed", "blocked", "failed", "deleted"],
+			enum: ["pending", "in_progress", "completed", "blocked", "failed", "cancelled", "deleted"],
 			description:
 				"New status. Use 'deleted' to permanently remove the task. " +
 				"Use 'blocked' when the task is waiting for an answer from the supervisor (set blockQuestion too). " +
-				"Use 'failed' when the task errored or the assigned sub-agent aborted.",
+				"Use 'failed' when work errors or times out, and 'cancelled' when it is explicitly stopped.",
 		}),
 	),
 	content: Type.Optional(Type.String({ description: "New task title." })),

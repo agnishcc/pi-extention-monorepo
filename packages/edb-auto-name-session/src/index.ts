@@ -1,4 +1,4 @@
-import { complete } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai/compat";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { extractUserText, sanitizeSessionName, shouldArmAutoNaming } from "./title";
 

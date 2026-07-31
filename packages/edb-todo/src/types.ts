@@ -1,6 +1,6 @@
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type TaskStatus = "pending" | "in_progress" | "completed" | "blocked" | "failed";
+export type TaskStatus = "pending" | "in_progress" | "completed" | "blocked" | "failed" | "cancelled";
 export type TaskPriority = "high" | "medium" | "low";
 
 export interface Task {
@@ -34,6 +34,14 @@ export interface TaskDetails {
 export interface TaskStoreData {
 	nextId: number;
 	tasks: Task[];
+	idempotency?: IdempotencyRecord[];
+}
+
+export interface IdempotencyRecord {
+	operationId: string;
+	fingerprint: string;
+	result: unknown;
+	createdAt: number;
 }
 
 // ── Visual constants ───────────────────────────────────────────────────────────
@@ -44,6 +52,7 @@ export const STATUS_ICON: Record<TaskStatus, string> = {
 	completed: "✓",
 	blocked: "⏸",
 	failed: "✗",
+	cancelled: "⊘",
 };
 
 export const PRIORITY_ORDER: Record<TaskPriority, number> = {
