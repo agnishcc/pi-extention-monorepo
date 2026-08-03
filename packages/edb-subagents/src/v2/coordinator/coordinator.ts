@@ -420,6 +420,10 @@ export class Coordinator {
 
 	private async handleOutcome(runId: RunId, outcome: SegmentOutcome): Promise<void> {
 		let run = this.registry.getRun(runId);
+		// Ignore outcomes that race with (or duplicate) a terminal result — the run is
+		// already finalized and notified. Re-processing here would re-run notifications
+		// (duplicate "completed" messages to the parent) and can throw on invalid transitions.
+		if (TERMINAL_RUN_STATES.has(run.state)) return;
 		let agent = this.registry.getAgent(run.agentId);
 		if (outcome.kind === "waiting_parent" || outcome.kind === "waiting_child") {
 			if (run.state === "running") {
@@ -683,6 +687,18 @@ export class Coordinator {
 		const childRun = this.registry.getRun(runId);
 		assertCanManage(this.registry, caller.agentId, childRun.agentId);
 		const child = this.registry.getAgent(childRun.agentId);
+		// Idempotent: reuse an existing unresolved wait link for the same parent + child run.
+		// Repeated get_subagent_result(wait: true) calls otherwise register one link per call,
+		// and completion delivers the full result once per link (duplicate notifications).
+		const existing = this.waits
+			.all()
+			.find(
+				(link) =>
+					link.parentAgentId === caller.agentId &&
+					link.childRunId === runId &&
+					(link.state === "waiting" || link.state === "question_delivered"),
+			);
+		if (existing) return existing;
 		const link: WaitLink = {
 			id: createId("wait"),
 			parentAgentId: caller.agentId,
