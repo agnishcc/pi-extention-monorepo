@@ -12,6 +12,7 @@ A Pi CLI extension that gives the agent a structured task list to prevent **goal
 - **System-reminder injection** — periodic nudges when task tools haven't been used recently
 - **Settings panel** — `/todos → ⚙ Settings` (task storage + auto-clear, saved to `tasks-config.json`)
 - **Priority system** — high / medium / low with color coding (Red / Yellow / Dim)
+- **Versioned in-process RPC** — optional capability used by Subagents V2 without exposing task-file paths to children
 
 ## How it works
 
@@ -82,7 +83,7 @@ Retrieve output from a running or completed background task process.
 
 ### `TaskStop`
 
-Stop a running background task process. Sends SIGTERM, waits 5 seconds, then SIGKILL. Marks the task as completed.
+Stop a running background task process. Sends SIGTERM, waits 5 seconds, then SIGKILL. Marks the task as cancelled.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -92,6 +93,7 @@ Stop a running background task process. Sends SIGTERM, waits 5 seconds, then SIG
 
 ```
 pending → in_progress → completed
+                      → cancelled
                       → deleted  (permanently removed)
 ```
 
@@ -102,7 +104,7 @@ pending → in_progress → completed
 TaskUpdate { id: "t2", addBlockedBy: ["t1"] }
 ```
 
-Edges are bidirectional. The widget and `TaskList` show open blockers inline (`› blocked by #t1`). Cycles and self-dependencies produce warnings but are stored.
+Edges are bidirectional. The widget and `TaskList` show open blockers inline (`› blocked by #t1`). Cycles and self-dependencies are rejected before the task file is changed.
 
 ## Task storage
 

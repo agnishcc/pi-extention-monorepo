@@ -86,6 +86,8 @@ export class TodoWidget {
 			icon = theme.fg("warning", "⏸");
 		} else if (task.status === "failed") {
 			icon = theme.fg("error", "✗");
+		} else if (task.status === "cancelled") {
+			icon = theme.fg("dim", "⊘");
 		} else {
 			icon = "◻";
 		}
@@ -126,6 +128,8 @@ export class TodoWidget {
 			text = `${pad}${icon} ${theme.fg("muted", task.content)}${ownerTag}`;
 		} else if (task.status === "failed") {
 			text = `${pad}${icon} ${theme.fg("error", task.content)}${ownerTag}`;
+		} else if (task.status === "cancelled") {
+			text = `${pad}${icon} ${theme.fg("dim", task.content)}${ownerTag}`;
 		} else {
 			text = `${pad}${icon} ${task.content}${ownerTag}`;
 		}
@@ -143,6 +147,7 @@ export class TodoWidget {
 		const inProgress = tasks.filter((t) => t.status === "in_progress");
 		const blocked = tasks.filter((t) => t.status === "blocked");
 		const failed = tasks.filter((t) => t.status === "failed");
+		const cancelled = tasks.filter((t) => t.status === "cancelled");
 		const pending = tasks.filter((t) => t.status === "pending");
 
 		const parts: string[] = [];
@@ -150,6 +155,7 @@ export class TodoWidget {
 		if (inProgress.length > 0) parts.push(`${inProgress.length} in progress`);
 		if (blocked.length > 0) parts.push(theme.fg("warning", `${blocked.length} blocked`));
 		if (failed.length > 0) parts.push(theme.fg("error", `${failed.length} failed`));
+		if (cancelled.length > 0) parts.push(theme.fg("dim", `${cancelled.length} cancelled`));
 		if (pending.length > 0) parts.push(`${pending.length} open`);
 		const statusText = `${tasks.length} task${tasks.length !== 1 ? "s" : ""} (${parts.join(", ")})`;
 
@@ -278,6 +284,8 @@ export function statusIcon(status: TaskStatus): string {
 	if (status === "completed") return "✓";
 	if (status === "in_progress") return "●";
 	if (status === "blocked") return "⏸";
+	if (status === "failed") return "✗";
+	if (status === "cancelled") return "⊘";
 	return "○";
 }
 
@@ -290,12 +298,14 @@ export function renderTaskListResult(tasks: Task[], expanded: boolean, theme: an
 	const inProgCount = tasks.filter((t) => t.status === "in_progress").length;
 	const blockedCount = tasks.filter((t) => t.status === "blocked").length;
 	const failedCount = tasks.filter((t) => t.status === "failed").length;
+	const cancelledCount = tasks.filter((t) => t.status === "cancelled").length;
 	const total = tasks.length;
 
 	const parts: string[] = [];
 	if (inProgCount > 0) parts.push(theme.fg("accent", `● ${inProgCount} active`));
 	if (blockedCount > 0) parts.push(theme.fg("warning", `⏸ ${blockedCount} blocked`));
 	if (failedCount > 0) parts.push(theme.fg("error", `✗ ${failedCount} failed`));
+	if (cancelledCount > 0) parts.push(theme.fg("dim", `⊘ ${cancelledCount} cancelled`));
 	parts.push(theme.fg("success", `✓ ${doneCount}/${total} done`));
 	let output = parts.join("  ");
 
@@ -310,7 +320,9 @@ export function renderTaskListResult(tasks: Task[], expanded: boolean, theme: an
 						? theme.fg("warning", "⏸")
 						: t.status === "failed"
 							? theme.fg("error", "✗")
-							: theme.fg("dim", "○");
+							: t.status === "cancelled"
+								? theme.fg("dim", "⊘")
+								: theme.fg("dim", "○");
 		const pColor = priorityColor(t.priority);
 		const pLabel = theme.fg(pColor, priorityLabel(t.priority));
 		const ownerTag = t.owner ? theme.fg("dim", ` [${t.owner}]`) : "";
@@ -324,7 +336,9 @@ export function renderTaskListResult(tasks: Task[], expanded: boolean, theme: an
 						? theme.fg("muted", t.content)
 						: t.status === "failed"
 							? theme.fg("error", t.content)
-							: theme.fg("muted", t.content);
+							: t.status === "cancelled"
+								? theme.fg("dim", t.content)
+								: theme.fg("muted", t.content);
 		output += `\n${subtaskIndent}${icon} ${pLabel}  ${content}${ownerTag}`;
 	}
 

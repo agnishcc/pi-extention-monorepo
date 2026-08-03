@@ -1,0 +1,18 @@
+{
+	"name": "@agnishc/edb-protocol",
+	"version": "0.18.2",
+	"description": "Shared versioned protocols for EDB Pi extensions",
+	"type": "module",
+	"license": "MIT",
+	"private": false,
+	"files": [
+		"src"
+	],
+	"exports": {
+		".": "./src/index.ts",
+		"./todo-v1": "./src/todo-v1.ts"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}

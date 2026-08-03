@@ -19,9 +19,10 @@ export function buildSystemPromptBlock(store: FileTaskStore): string {
 	const pending = active
 		.filter((t) => t.status === "pending")
 		.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+	const attention = active.filter((t) => t.status === "blocked" || t.status === "failed");
 
-	for (const t of [...inProg, ...pending]) {
-		const icon = t.status === "in_progress" ? "●" : "○";
+	for (const t of [...inProg, ...pending, ...attention]) {
+		const icon = t.status === "in_progress" ? "●" : t.status === "blocked" ? "⏸" : t.status === "failed" ? "✗" : "○";
 		const pLabel = `[${priorityLabel(t.priority)}]`;
 		const suffix = t.status === "in_progress" ? "  ← in progress" : "";
 		const depStr = t.blockedBy.length > 0 ? ` [blocked by ${t.blockedBy.map((id) => `#${id}`).join(", ")}]` : "";
@@ -43,7 +44,18 @@ export function formatListForLLM(store: FileTaskStore): string {
 	if (tasks.length === 0) return "Task list is empty.";
 	return tasks
 		.map((t) => {
-			const icon = t.status === "in_progress" ? "●" : t.status === "completed" ? "✓" : "○";
+			const icon =
+				t.status === "in_progress"
+					? "●"
+					: t.status === "completed"
+						? "✓"
+						: t.status === "blocked"
+							? "⏸"
+							: t.status === "failed"
+								? "✗"
+								: t.status === "cancelled"
+									? "⊘"
+									: "○";
 			const dep = t.blockedBy.length > 0 ? ` [blocked by ${t.blockedBy.map((id) => `#${id}`).join(", ")}]` : "";
 			return `${icon} [${priorityLabel(t.priority)}] [${t.id}] ${t.content}${dep}`;
 		})

@@ -76,6 +76,8 @@ import {
 } from "./ui/agent-widget.js";
 import { showSchedulesMenu } from "./ui/schedule-menu.js";
 import { addUsage, getLifetimeTotal, getSessionContextPercent, type LifetimeUsage } from "./usage.js";
+import subagentsV2Extension from "./v2/index.js";
+import { loadV2Settings } from "./v2/settings.js";
 
 // ---- Shared helpers ----
 
@@ -262,7 +264,7 @@ function buildNotificationDetails(
 	};
 }
 
-export default function (pi: ExtensionAPI) {
+function v1Extension(pi: ExtensionAPI) {
 	// ---- Register custom notification renderer ----
 	pi.registerMessageRenderer<NotificationDetails>("subagent-notification", (message, { expanded }, theme) => {
 		const d = message.details;
@@ -2354,4 +2356,9 @@ ${systemPrompt}
 			await showAgentsMenu(ctx);
 		},
 	});
+}
+
+export default function subagentsExtension(pi: ExtensionAPI): void {
+	if (loadV2Settings(process.cwd()).engine === "v2") subagentsV2Extension(pi);
+	else v1Extension(pi);
 }

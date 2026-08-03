@@ -22,8 +22,11 @@ import { loadTodoConfig } from "./config.js";
 import { FileTaskStore } from "./file-store.js";
 import { ProcessTracker } from "./process-tracker.js";
 import { buildSystemPromptBlock, formatListForLLM } from "./prompt.js";
+import { createTodoCapability } from "./rpc/capability.js";
+import { TodoRpcServer } from "./rpc/server.js";
 import { TodoCreateParams, TodoGetParams, TodoUpdateParams } from "./schemas.js";
 import { priorityColor, priorityLabel, renderTaskListResult, TodoWidget } from "./state.js";
+import { TaskService } from "./task-service.js";
 import type { TaskDetails, TaskPriority } from "./types.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -64,10 +67,19 @@ export default function todoExtension(pi: ExtensionAPI): void {
 	}
 
 	let store = new FileTaskStore(resolveStorePath());
+	let taskService = new TaskService(store);
+	let rpcServer: TodoRpcServer | undefined;
+	const rootActor = { agentId: "root", runId: null };
+	function setStore(nextStore: FileTaskStore) {
+		store = nextStore;
+		taskService = new TaskService(store);
+		widget.setStore(store);
+		autoClear.getService = () => taskService;
+	}
 	const tracker = new ProcessTracker();
 	const widget = new TodoWidget(store);
 	const autoClear = new AutoClearManager(
-		() => store,
+		() => taskService,
 		() => cfg.autoClearCompleted ?? "on_list_complete",
 		AUTO_CLEAR_DELAY,
 	);
@@ -99,13 +111,13 @@ export default function todoExtension(pi: ExtensionAPI): void {
 	pi.events.on("bridge:notify_parent", (payload: unknown) => {
 		const p = payload as { taskId?: string; message?: string; agentId?: string } | undefined;
 		if (!p?.taskId || !p.message) return;
-		try {
+		void (async () => {
 			// Update activeForm on the task so the widget spinner shows the progress message
-			store.update(p.taskId, { activeForm: p.message.slice(0, 80) });
+			await taskService.applyUpdate(p.taskId!, { activeForm: p.message!.slice(0, 80) }, rootActor);
 			widget.update();
-		} catch {
+		})().catch(() => {
 			/* ignore */
-		}
+		});
 	});
 
 	// Listen for bridge:ask_supervisor — sub-agent called ask_supervisor with a task_id
@@ -113,29 +125,31 @@ export default function todoExtension(pi: ExtensionAPI): void {
 	pi.events.on("bridge:ask_supervisor", (payload: unknown) => {
 		const p = payload as { taskId?: string; question?: string; messageId?: string } | undefined;
 		if (!p?.taskId || !p.question) return;
-		try {
-			store.update(p.taskId, {
-				status: "blocked",
-				blockQuestion: p.question,
-				blockMessageId: p.messageId,
-			});
-			widget.update();
-		} catch {
-			/* ignore */
-		}
+		void taskService
+			.applyUpdate(
+				p.taskId,
+				{
+					status: "blocked",
+					blockQuestion: p.question,
+					blockMessageId: p.messageId,
+				},
+				rootActor,
+			)
+			.then(() => widget.update())
+			.catch(() => {});
 	});
 
 	// Listen for bridge:supervisor_answered — orchestrator answered, unblock the task
 	pi.events.on("bridge:supervisor_answered", (payload: unknown) => {
 		const p = payload as { taskId?: string } | undefined;
 		if (!p?.taskId) return;
-		try {
+		void (async () => {
 			// Transition back to in_progress and clear block metadata
-			store.update(p.taskId, { status: "in_progress" });
+			await taskService.applyUpdate(p.taskId!, { status: "in_progress" }, rootActor);
 			widget.update();
-		} catch {
+		})().catch(() => {
 			/* ignore */
-		}
+		});
 	});
 
 	// Listen for todo:update_task — edb-subagents requests a task status update
@@ -143,14 +157,14 @@ export default function todoExtension(pi: ExtensionAPI): void {
 	pi.events.on("todo:update_task", (payload: unknown) => {
 		const p = payload as { taskId?: string; fields?: { status?: string; owner?: string } } | undefined;
 		if (!p?.taskId || !p.fields) return;
-		try {
-			store.update(p.taskId, p.fields as any);
+		void (async () => {
+			await taskService.applyUpdate(p.taskId!, p.fields as any, rootActor);
 			widget.update();
 			// Notify bridge to propagate refresh to parent if we're in a sub-agent store
 			notifyBridgeOnChange();
-		} catch {
+		})().catch(() => {
 			/* ignore */
-		}
+		});
 	});
 
 	// Parse task store path from system prompt (for sub-agent sessions)
@@ -163,9 +177,7 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		if (!match) return;
 		const path = match[1]!.trim();
 		if (path && path !== store.path) {
-			store = new FileTaskStore(path);
-			widget.setStore(store);
-			autoClear.getStore = () => store;
+			setStore(new FileTaskStore(path));
 			storeUpgraded = true; // prevent upgradeStoreIfNeeded from overriding
 			emitStorePath();
 		}
@@ -186,22 +198,20 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		if (taskScope === "session" && !process.env.PI_TODO) {
 			const path = resolveStorePath(sessionId);
 			if (path) {
-				store = new FileTaskStore(path);
-				widget.setStore(store);
-				autoClear.getStore = () => store;
+				setStore(new FileTaskStore(path));
 			}
 		}
 		storeUpgraded = true;
 		emitStorePath();
 	}
 
-	function showPersistedTasks(isResume = false) {
+	async function showPersistedTasks(isResume = false) {
 		if (persistedTasksShown) return;
 		persistedTasksShown = true;
 		const tasks = store.list();
 		if (tasks.length > 0) {
 			if (!isResume && tasks.every((t) => t.status === "completed")) {
-				store.clearCompleted();
+				await taskService.clearCompleted(rootActor);
 				if (taskScope === "session") store.deleteFileIfEmpty();
 			} else {
 				widget.update();
@@ -220,7 +230,7 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		cfg = loadTodoConfig(cwd);
 		widget.setUICtx(ctx.ui);
 		upgradeStoreIfNeeded(ctx.sessionManager.getSessionId());
-		if (autoClear.onTurnStart(currentTurn)) widget.update();
+		if (await autoClear.onTurnStart(currentTurn)) widget.update();
 	});
 
 	// ── System-reminder injection ──────────────────────────────────────────────
@@ -249,7 +259,7 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		// For sub-agent sessions: read store path from system prompt (injected by edb-subagents)
 		maybeOverrideStoreFromPrompt(event.systemPrompt, ctx.sessionManager.getSessionId());
 		upgradeStoreIfNeeded(ctx.sessionManager.getSessionId());
-		showPersistedTasks();
+		await showPersistedTasks();
 		const block = buildSystemPromptBlock(store);
 		if (!block) return;
 		return { systemPrompt: `${event.systemPrompt}\n\n${block}` };
@@ -273,10 +283,22 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		lastTaskToolUseTurn = 0;
 		reminderInjectedThisCycle = false;
 		autoClear.reset();
-		if (!isResume && taskScope === "memory") store.clearAll();
+		if (!isResume && taskScope === "memory") await taskService.clearAll(rootActor);
 		upgradeStoreIfNeeded(ctx.sessionManager.getSessionId());
 		widget.setUICtx(ctx.ui);
-		showPersistedTasks(isResume);
+		await showPersistedTasks(isResume);
+		rpcServer?.dispose();
+		rpcServer = new TodoRpcServer(pi, taskService, createTodoCapability(ctx.sessionManager.getSessionId()), () =>
+			widget.update(),
+		);
+		rpcServer.start();
+	});
+
+	pi.on("session_shutdown", async () => {
+		rpcServer?.dispose();
+		rpcServer = undefined;
+		widget.dispose();
+		await store.cleanup();
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
@@ -363,15 +385,17 @@ All tasks are created with status \`pending\`.
 				| undefined;
 
 			if (batchItems && batchItems.length > 0) {
-				const created = batchItems.map((item) =>
-					store.create(item.content, {
+				const created = await taskService.createMany(
+					batchItems.map((item) => ({
+						content: item.content,
 						description: item.description,
 						priority: item.priority as TaskPriority | undefined,
 						activeForm: item.activeForm,
 						parentId: item.parentId,
 						groupId: item.groupId,
 						metadata: item.metadata,
-					}),
+					})),
+					rootActor,
 				);
 				notifyBridgeOnChange();
 				widget.update();
@@ -399,14 +423,18 @@ All tasks are created with status \`pending\`.
 					details: { tasks: [...store.list()] } satisfies TaskDetails,
 				};
 			}
-			const task = store.create(params.content, {
-				description: params.description,
-				priority: params.priority as TaskPriority | undefined,
-				activeForm: params.activeForm,
-				parentId: params.parentId as string | undefined,
-				groupId: params.groupId as string | undefined,
-				metadata: params.metadata,
-			});
+			const task = await taskService.create(
+				{
+					content: params.content,
+					description: params.description,
+					priority: params.priority as TaskPriority | undefined,
+					activeForm: params.activeForm,
+					parentId: params.parentId as string | undefined,
+					groupId: params.groupId as string | undefined,
+					metadata: params.metadata,
+				},
+				rootActor,
+			);
 			notifyBridgeOnChange();
 			widget.update();
 			return {
@@ -465,7 +493,7 @@ All tasks are created with status \`pending\`.
 Returns a summary of each task:
 - **id**: Task identifier (use with TaskGet, TaskUpdate)
 - **content**: Brief description of the task
-- **status**: pending, in_progress, or completed
+- **status**: pending, in_progress, blocked, failed, cancelled, or completed
 - **priority**: high, medium, or low
 - **blockedBy**: Open task IDs that must be resolved first
 
@@ -481,7 +509,14 @@ Use TaskGet with a specific task ID to view full details including description.`
 					details: { tasks: [] } satisfies TaskDetails,
 				};
 
-			const statusOrder: Record<string, number> = { pending: 0, in_progress: 1, blocked: 2, completed: 3 };
+			const statusOrder: Record<string, number> = {
+				pending: 0,
+				in_progress: 1,
+				blocked: 2,
+				failed: 3,
+				cancelled: 4,
+				completed: 5,
+			};
 			const sorted = [...tasks].sort((a, b) => {
 				const so = (statusOrder[a.status] ?? 0) - (statusOrder[b.status] ?? 0);
 				if (so !== 0) return so;
@@ -538,7 +573,7 @@ Use TaskGet with a specific task ID to view full details including description.`
 Returns full task details:
 - **content**: Task title
 - **description**: Detailed requirements and context
-- **status**: pending, in_progress, or completed
+- **status**: pending, in_progress, blocked, failed, cancelled, or completed
 - **priority**: high, medium, or low
 - **blocks**: Tasks waiting on this one to complete
 - **blockedBy**: Tasks that must complete before this one can start
@@ -636,7 +671,7 @@ Returns full task details:
 
 ## Fields You Can Update
 
-- **status**: pending → in_progress → completed (or deleted to remove)
+- **status**: pending → in_progress → completed, or blocked / failed / cancelled (deleted removes)
 - **content**: Change the task title
 - **description**: Change the task description
 - **activeForm**: Spinner text when in_progress (e.g., "Running tests")
@@ -648,7 +683,7 @@ Returns full task details:
 
 ## Status Workflow
 
-\`pending\` → \`in_progress\` → \`completed\`
+\`pending\` → \`in_progress\` → \`completed\`; use \`blocked\`, \`failed\`, or \`cancelled\` when work does not complete normally.
 
 Use \`deleted\` to permanently remove a task.
 
@@ -674,7 +709,7 @@ Set dependencies:
 
 		async execute(_id, params, _signal, _onUpdate, ctx) {
 			const { id, ...fields } = params;
-			const { task, changedFields, warnings } = store.update(id, fields as any);
+			const { task, changedFields, warnings } = await taskService.applyUpdate(id, fields as any, rootActor);
 
 			if (changedFields.length === 0 && !task) {
 				return {
@@ -820,7 +855,7 @@ Set dependencies:
 		description:
 			"Stops a running background task process.\n" +
 			"- Sends SIGTERM, waits 5 seconds, then SIGKILL if still running\n" +
-			"- Marks the task as completed after stopping\n" +
+			"- Marks the task as cancelled after stopping\n" +
 			"- Use this tool when you need to terminate a long-running task",
 		promptSnippet: "Stop a running background task process",
 		parameters: Type.Object({
@@ -846,7 +881,7 @@ Set dependencies:
 				};
 			}
 
-			store.update(task_id, { status: "completed" });
+			await taskService.applyUpdate(task_id, { status: "cancelled" }, rootActor);
 			autoClear.trackCompletion(task_id, currentTurn);
 			widget.setActiveTask(task_id, false);
 			widget.setUICtx(ctx.ui);
@@ -868,7 +903,7 @@ Set dependencies:
 				ctx.ui.notify(store.list().length === 0 ? "No tasks yet." : formatListForLLM(store), "info");
 				return;
 			}
-			await openTodosMenu(ctx.ui, store, cfg, cwd, (taskId, status) => {
+			await openTodosMenu(ctx.ui, store, taskService, cfg, cwd, (taskId, status) => {
 				if (status === "in_progress") widget.setActiveTask(taskId);
 				else if (status) widget.setActiveTask(taskId, false);
 				widget.update();

@@ -10,7 +10,25 @@ Forked from [tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents) 
 pi install npm:@agnishc/edb-subagents
 ```
 
+## Subagents V2 opt-in
+
+V2 is available behind an explicit engine setting while V1 remains the default. Add this to `.pi/subagents.json`:
+
+```json
+{
+  "engine": "v2"
+}
+```
+
+V2 uses persistent Pi sessions, recursive foreground/background agents, logical wait/resume, nested questions, bounded concurrency, atomic recovery state, and an optional versioned RPC connection to `@agnishc/edb-todo`. Child sessions load exact tool allowlists and no parent extensions. Project agent definitions are loaded only for trusted projects.
+
+V2 management commands are `/agents tree`, `/agents questions`, `/agents show <agentId>`, `/agents stop <agentId>`, `/agents dispose <agentId>`, `/agents recovery`, `/agents outbox`, and `/agents diagnostics`.
+
+The V1-only worktree, scheduler, memory, group-join, and bridge behaviors listed below are not part of V2.
+
 ## Features
+
+The following features describe the default V1 engine:
 
 - **Live widget** — persistent above-editor widget with animated spinners, live tool activity, token counts, and context utilisation
 - **Parallel background agents** — spawn multiple agents concurrently with automatic queuing

@@ -1,51 +1,43 @@
-/**
- * file-store.ts — File-backed task store with CRUD, dependency management, and file locking.
- *
- * memory (no path): in-memory only.
- * session / project: file-backed with atomic writes and file locking.
- */
+/** File-backed task persistence with asynchronous inter-process locking. */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from "node:fs";
+import { open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { Task, TaskPriority, TaskStatus, TaskStoreData } from "./types.js";
+import type { IdempotencyRecord, Task, TaskPriority, TaskStatus, TaskStoreData } from "./types.js";
 
 const LOCK_RETRY_MS = 50;
-const LOCK_MAX_RETRIES = 100; // 5s max
+const LOCK_MAX_RETRIES = 100;
+const IDEMPOTENCY_LIMIT = 500;
 
-function acquireLock(lockPath: string): void {
-	for (let i = 0; i < LOCK_MAX_RETRIES; i++) {
-		try {
-			writeFileSync(lockPath, `${process.pid}`, { flag: "wx" });
-			return;
-		} catch (e: any) {
-			if (e.code === "EEXIST") {
-				try {
-					const pid = parseInt(readFileSync(lockPath, "utf-8"), 10);
-					if (pid && !isProcessRunning(pid)) {
-						unlinkSync(lockPath);
-						continue;
-					}
-				} catch {
-					/* ignore */
-				}
-				const start = Date.now();
-				while (Date.now() - start < LOCK_RETRY_MS) {
-					/* busy wait */
-				}
-				continue;
-			}
-			throw e;
-		}
-	}
-	throw new Error(`Failed to acquire lock: ${lockPath}`);
+export interface MutationIdentity {
+	operationId: string;
+	fingerprint: string;
 }
 
-function releaseLock(lockPath: string): void {
-	try {
-		unlinkSync(lockPath);
-	} catch {
-		/* ignore */
+export class TaskStoreCorruptionError extends Error {
+	constructor(
+		public readonly originalPath: string,
+		public readonly preservedPath: string,
+		options?: ErrorOptions,
+	) {
+		super(`Task store is corrupt; preserved at ${preservedPath}`, options);
+		this.name = "TaskStoreCorruptionError";
 	}
+}
+
+export class IdempotencyConflictError extends Error {
+	constructor(public readonly operationId: string) {
+		super(`Operation ${operationId} was already used with different parameters`);
+		this.name = "IdempotencyConflictError";
+	}
+}
+
+function cloneTask(task: Task): Task {
+	return structuredClone(task);
+}
+
+function cloneResult<T>(value: T): T {
+	return structuredClone(value);
 }
 
 function isProcessRunning(pid: number): boolean {
@@ -57,24 +49,71 @@ function isProcessRunning(pid: number): boolean {
 	}
 }
 
-// ── FileTaskStore ──────────────────────────────────────────────────────────────
+async function acquireLock(lockPath: string): Promise<() => Promise<void>> {
+	for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
+		try {
+			const handle = await open(lockPath, "wx");
+			await handle.writeFile(`${process.pid}`);
+			await handle.sync();
+			await handle.close();
+			return async () => {
+				try {
+					await unlink(lockPath);
+				} catch (error: any) {
+					if (error?.code !== "ENOENT") throw error;
+				}
+			};
+		} catch (error: any) {
+			if (error?.code !== "EEXIST") throw error;
+			try {
+				const pid = Number.parseInt(await readFile(lockPath, "utf8"), 10);
+				if (pid && !isProcessRunning(pid)) {
+					await unlink(lockPath);
+					continue;
+				}
+			} catch (readError: any) {
+				if (readError?.code === "ENOENT") continue;
+			}
+			await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS));
+		}
+	}
+	throw new Error(`Failed to acquire lock: ${lockPath}`);
+}
+
+export interface TaskUpdateFields {
+	status?: TaskStatus | "deleted";
+	content?: string;
+	description?: string;
+	priority?: TaskPriority;
+	activeForm?: string;
+	owner?: string;
+	parentId?: string;
+	groupId?: string;
+	blockedByGroup?: string;
+	blockQuestion?: string;
+	blockMessageId?: string;
+	metadata?: Record<string, any>;
+	addBlocks?: string[];
+	addBlockedBy?: string[];
+}
+
+export interface CreateTaskOptions {
+	description?: string;
+	priority?: TaskPriority;
+	activeForm?: string;
+	owner?: string;
+	parentId?: string;
+	groupId?: string;
+	metadata?: Record<string, any>;
+}
 
 export class FileTaskStore {
 	private filePath: string | undefined;
 	private lockPath: string | undefined;
-
-	/** The file path this store persists to. Undefined for in-memory stores. */
-	get path(): string | undefined {
-		return this.filePath;
-	}
-
-	/** Force-reload from disk (useful when another process may have written to the store). */
-	reload(): void {
-		this.load();
-	}
-
 	private nextId = 1;
 	private tasks = new Map<string, Task>();
+	private idempotency = new Map<string, IdempotencyRecord>();
+	private mutationQueue: Promise<void> = Promise.resolve();
 
 	constructor(filePath?: string) {
 		if (!filePath) return;
@@ -84,88 +123,172 @@ export class FileTaskStore {
 		this.load();
 	}
 
+	get path(): string | undefined {
+		return this.filePath;
+	}
+
+	reload(): void {
+		this.load();
+	}
+
 	private load(): void {
-		if (!this.filePath) return;
-		if (!existsSync(this.filePath)) return;
+		if (!this.filePath || !existsSync(this.filePath)) return;
 		try {
-			const data: TaskStoreData = JSON.parse(readFileSync(this.filePath, "utf-8"));
-			this.nextId = data.nextId ?? 1;
-			this.tasks.clear();
-			for (const t of data.tasks) {
-				// Migrate old tasks that lack new fields
-				if (!t.metadata) t.metadata = {};
-				if (!t.blocks) t.blocks = [];
-				if (!t.blockedBy) t.blockedBy = [];
-				if (!t.updatedAt) t.updatedAt = t.createdAt;
-				// New fields — default to undefined (no migration needed, optional)
-				this.tasks.set(t.id, t);
-			}
-		} catch {
-			/* corrupt file — start fresh */
+			this.applyData(JSON.parse(readFileSync(this.filePath, "utf8")) as TaskStoreData);
+		} catch (cause) {
+			const preservedPath = `${this.filePath}.corrupt-${Date.now()}`;
+			renameSync(this.filePath, preservedPath);
+			throw new TaskStoreCorruptionError(this.filePath, preservedPath, { cause });
 		}
 	}
 
-	/**
-	 * Check if a parallel group is fully complete (all tasks with that groupId are completed).
-	 * Used to resolve blockedByGroup dependencies.
-	 */
-	isGroupComplete(groupId: string): boolean {
-		const groupTasks = Array.from(this.tasks.values()).filter((t) => t.groupId === groupId);
-		if (groupTasks.length === 0) return true; // no tasks in group — treat as complete
-		return groupTasks.every((t) => t.status === "completed");
+	private applyData(data: TaskStoreData): void {
+		if (!data || !Array.isArray(data.tasks) || !Number.isInteger(data.nextId))
+			throw new Error("Invalid task store schema");
+		this.nextId = data.nextId;
+		this.tasks.clear();
+		for (const raw of data.tasks) {
+			if (!raw || typeof raw.id !== "string" || typeof raw.content !== "string")
+				throw new Error("Invalid task record");
+			const task = cloneTask(raw);
+			task.metadata ??= {};
+			task.blocks ??= [];
+			task.blockedBy ??= [];
+			task.updatedAt ||= task.createdAt;
+			this.tasks.set(task.id, task);
+		}
+		this.idempotency = new Map((data.idempotency ?? []).map((record) => [record.operationId, record]));
 	}
 
-	/**
-	 * Get all tasks that are ready to start:
-	 * - status === "pending"
-	 * - no open blockedBy tasks
-	 * - blockedByGroup is resolved (if set)
-	 */
+	private data(): TaskStoreData {
+		return {
+			nextId: this.nextId,
+			tasks: [...this.tasks.values()].map(cloneTask),
+			idempotency: [...this.idempotency.values()].slice(-IDEMPOTENCY_LIMIT).map(cloneResult),
+		};
+	}
+
+	private async save(): Promise<void> {
+		if (!this.filePath) return;
+		const temporaryPath = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
+		const payload = JSON.stringify(this.data(), null, 2);
+		const handle = await open(temporaryPath, "w");
+		try {
+			await handle.writeFile(payload);
+			await handle.sync();
+		} finally {
+			await handle.close();
+		}
+		await rename(temporaryPath, this.filePath);
+		try {
+			const directory = await open(dirname(this.filePath), "r");
+			try {
+				await directory.sync();
+			} finally {
+				await directory.close();
+			}
+		} catch {
+			// Directory fsync is unavailable on some platforms.
+		}
+	}
+
+	private async transaction<T>(mutation: () => T, identity?: MutationIdentity): Promise<T> {
+		let resolveResult!: (value: T | PromiseLike<T>) => void;
+		let rejectResult!: (reason?: unknown) => void;
+		const result = new Promise<T>((resolve, reject) => {
+			resolveResult = resolve;
+			rejectResult = reject;
+		});
+		const job = this.mutationQueue.then(async () => {
+			let release = async () => {};
+			try {
+				release = this.lockPath ? await acquireLock(this.lockPath) : async () => {};
+				if (this.filePath) this.load();
+				if (identity) {
+					const previous = this.idempotency.get(identity.operationId);
+					if (previous) {
+						if (previous.fingerprint !== identity.fingerprint)
+							throw new IdempotencyConflictError(identity.operationId);
+						resolveResult(cloneResult(previous.result as T));
+						return;
+					}
+				}
+				const before = this.data();
+				try {
+					const value = mutation();
+					this.validateDependencies();
+					if (identity) {
+						this.idempotency.set(identity.operationId, {
+							operationId: identity.operationId,
+							fingerprint: identity.fingerprint,
+							result: cloneResult(value),
+							createdAt: Date.now(),
+						});
+						while (this.idempotency.size > IDEMPOTENCY_LIMIT) {
+							this.idempotency.delete(this.idempotency.keys().next().value!);
+						}
+					}
+					await this.save();
+					resolveResult(cloneResult(value));
+				} catch (error) {
+					this.applyData(before);
+					throw error;
+				}
+			} catch (error) {
+				rejectResult(error);
+			} finally {
+				try {
+					await release();
+				} catch (error) {
+					rejectResult(error);
+				}
+			}
+		});
+		this.mutationQueue = job.catch(() => {});
+		return result;
+	}
+
+	private validateDependencies(): void {
+		for (const task of this.tasks.values()) {
+			for (const targetId of task.blocks) {
+				if (targetId === task.id) throw new Error(`#${task.id} cannot block itself`);
+				if (!this.tasks.has(targetId)) throw new Error(`#${targetId} does not exist`);
+			}
+			for (const blockerId of task.blockedBy) {
+				if (blockerId === task.id) throw new Error(`#${task.id} cannot be blocked by itself`);
+				if (!this.tasks.has(blockerId)) throw new Error(`#${blockerId} does not exist`);
+			}
+		}
+		const visiting = new Set<string>();
+		const visited = new Set<string>();
+		const visit = (id: string) => {
+			if (visiting.has(id)) throw new Error(`Dependency cycle includes #${id}`);
+			if (visited.has(id)) return;
+			visiting.add(id);
+			for (const target of this.tasks.get(id)?.blocks ?? []) visit(target);
+			visiting.delete(id);
+			visited.add(id);
+		};
+		for (const id of this.tasks.keys()) visit(id);
+	}
+
+	isGroupComplete(groupId: string): boolean {
+		const groupTasks = [...this.tasks.values()].filter((task) => task.groupId === groupId);
+		return groupTasks.length === 0 || groupTasks.every((task) => task.status === "completed");
+	}
+
 	getReadyTasks(): Task[] {
-		return this.list().filter((t) => {
-			if (t.status !== "pending") return false;
-			const hasOpenBlocker = t.blockedBy.some((bid) => {
-				const b = this.tasks.get(bid);
-				return b && b.status !== "completed";
-			});
-			if (hasOpenBlocker) return false;
-			if (t.blockedByGroup && !this.isGroupComplete(t.blockedByGroup)) return false;
-			return true;
+		return this.list().filter((task) => {
+			if (task.status !== "pending") return false;
+			if (task.blockedBy.some((id) => this.tasks.get(id)?.status !== "completed")) return false;
+			return !task.blockedByGroup || this.isGroupComplete(task.blockedByGroup);
 		});
 	}
 
-	private save(): void {
-		if (!this.filePath) return;
-		const data: TaskStoreData = {
-			nextId: this.nextId,
-			tasks: Array.from(this.tasks.values()),
-		};
-		const tmpPath = `${this.filePath}.tmp`;
-		writeFileSync(tmpPath, JSON.stringify(data, null, 2));
-		renameSync(tmpPath, this.filePath);
-	}
-
-	private withLock<T>(fn: () => T): T {
-		if (!this.lockPath) return fn();
-		acquireLock(this.lockPath);
-		try {
-			this.load();
-			const result = fn();
-			this.save();
-			return result;
-		} finally {
-			releaseLock(this.lockPath);
-		}
-	}
-
-	// ── Sync ID counter after external writes ────────────────────────────────
-
 	syncIdCounter(): void {
-		for (const t of this.tasks.values()) {
-			const m = t.id.match(/^t(\d+)$/);
-			if (m) this.nextId = Math.max(this.nextId, parseInt(m[1]!, 10) + 1);
-			const n = parseInt(t.id, 10);
-			if (!Number.isNaN(n)) this.nextId = Math.max(this.nextId, n + 1);
+		for (const task of this.tasks.values()) {
+			const match = task.id.match(/^t(\d+)$/);
+			if (match) this.nextId = Math.max(this.nextId, Number.parseInt(match[1]!, 10) + 1);
 		}
 	}
 
@@ -173,323 +296,220 @@ export class FileTaskStore {
 		return `t${this.nextId++}`;
 	}
 
-	// ── CRUD ──────────────────────────────────────────────────────────────────
+	async create(content: string, options?: CreateTaskOptions, identity?: MutationIdentity): Promise<Task> {
+		return this.transaction(() => this.createUnlocked(content, options), identity);
+	}
 
-	create(
-		content: string,
-		opts?: {
-			description?: string;
-			priority?: TaskPriority;
-			activeForm?: string;
-			owner?: string;
-			parentId?: string;
-			groupId?: string;
-			metadata?: Record<string, any>;
-		},
-	): Task {
-		return this.withLock(() => {
-			const now = Date.now();
-			const task: Task = {
-				id: `t${this.nextId++}`,
-				content,
-				description: opts?.description,
-				status: "pending",
-				priority: opts?.priority ?? "medium",
-				activeForm: opts?.activeForm,
-				owner: opts?.owner,
-				parentId: opts?.parentId,
-				groupId: opts?.groupId,
-				metadata: opts?.metadata ?? {},
-				blocks: [],
-				blockedBy: [],
-				createdAt: now,
-				updatedAt: now,
-			};
-			this.tasks.set(task.id, task);
-			return task;
-		});
+	async createMany(
+		items: Array<{ content: string; options?: CreateTaskOptions }>,
+		identity?: MutationIdentity,
+	): Promise<Task[]> {
+		return this.transaction(() => items.map((item) => this.createUnlocked(item.content, item.options)), identity);
+	}
+
+	private createUnlocked(content: string, options?: CreateTaskOptions): Task {
+		const now = Date.now();
+		if (options?.parentId && !this.tasks.has(options.parentId))
+			throw new Error(`Parent task #${options.parentId} does not exist`);
+		const task: Task = {
+			id: `t${this.nextId++}`,
+			content,
+			description: options?.description,
+			status: "pending",
+			priority: options?.priority ?? "medium",
+			activeForm: options?.activeForm,
+			owner: options?.owner,
+			parentId: options?.parentId,
+			groupId: options?.groupId,
+			metadata: options?.metadata ?? {},
+			blocks: [],
+			blockedBy: [],
+			createdAt: now,
+			updatedAt: now,
+		};
+		this.tasks.set(task.id, task);
+		return task;
 	}
 
 	get(id: string): Task | undefined {
 		if (this.filePath) this.load();
-		return this.tasks.get(id);
+		const task = this.tasks.get(id);
+		return task ? cloneTask(task) : undefined;
 	}
 
 	list(): Task[] {
 		if (this.filePath) this.load();
-		return Array.from(this.tasks.values());
+		return [...this.tasks.values()].map(cloneTask);
 	}
 
 	activeTasks(): Task[] {
-		return this.list().filter((t) => t.status !== "completed");
+		return this.list().filter((task) => task.status !== "completed" && task.status !== "cancelled");
 	}
 
-	/** Replace entire task list. */
-	setTasks(tasks: Task[]): void {
-		this.withLock(() => {
-			this.tasks.clear();
-			for (const t of tasks) {
-				this.tasks.set(t.id, t);
-			}
-		});
+	async setTasks(tasks: Task[], identity?: MutationIdentity): Promise<void> {
+		await this.transaction(() => {
+			this.tasks = new Map(tasks.map((task) => [task.id, cloneTask(task)]));
+			this.syncIdCounter();
+		}, identity);
 	}
 
-	update(
+	async update(
 		id: string,
-		fields: {
-			status?: TaskStatus | "deleted";
-			content?: string;
-			description?: string;
-			priority?: TaskPriority;
-			activeForm?: string;
-			owner?: string;
-			parentId?: string;
-			groupId?: string;
-			blockedByGroup?: string;
-			blockQuestion?: string;
-			blockMessageId?: string;
-			metadata?: Record<string, any>;
-			addBlocks?: string[];
-			addBlockedBy?: string[];
-		},
+		fields: TaskUpdateFields,
+		identity?: MutationIdentity,
+	): Promise<{ task: Task | undefined; changedFields: string[]; warnings: string[] }> {
+		return this.transaction(() => this.updateUnlocked(id, fields), identity);
+	}
+
+	private updateUnlocked(
+		id: string,
+		fields: TaskUpdateFields,
 	): { task: Task | undefined; changedFields: string[]; warnings: string[] } {
-		return this.withLock(() => {
-			const task = this.tasks.get(id);
-			if (!task) return { task: undefined, changedFields: [], warnings: [] };
-
-			const changedFields: string[] = [];
-			const warnings: string[] = [];
-
-			if (fields.status === "deleted") {
-				this.tasks.delete(id);
-				// Clean up edges
-				for (const t of this.tasks.values()) {
-					t.blocks = t.blocks.filter((bid) => bid !== id);
-					t.blockedBy = t.blockedBy.filter((bid) => bid !== id);
-				}
-				return { task: undefined, changedFields: ["deleted"], warnings: [] };
+		const task = this.tasks.get(id);
+		if (!task) return { task: undefined, changedFields: [], warnings: [] };
+		if (fields.status === "deleted") {
+			this.deleteUnlocked(id);
+			return { task: undefined, changedFields: ["deleted"], warnings: [] };
+		}
+		const changedFields: string[] = [];
+		const warnings: string[] = [];
+		const now = Date.now();
+		if (fields.status !== undefined) {
+			if (fields.status === "in_progress" && task.blockedByGroup && !this.isGroupComplete(task.blockedByGroup)) {
+				return {
+					task: cloneTask(task),
+					changedFields,
+					warnings: [`Task is waiting for group ${task.blockedByGroup}`],
+				};
 			}
-
-			const now = Date.now();
-
-			if (fields.status !== undefined) {
-				// blockedByGroup enforcement: reject in_progress if the group is not yet complete
-				if (fields.status === "in_progress" && task.blockedByGroup && !this.isGroupComplete(task.blockedByGroup)) {
-					warnings.push(
-						`Cannot set status to in_progress: task is waiting for group [${task.blockedByGroup}] which is not yet complete. ` +
-							`Complete all tasks in that group first, or remove blockedByGroup from this task.`,
-					);
-					// Return early — do not apply any changes
-					return { task, changedFields: [], warnings };
-				}
-				// Timestamp transitions
-				if (task.status !== "in_progress" && fields.status === "in_progress") task.startedAt = now;
-				if (task.status !== "completed" && fields.status === "completed") {
-					task.startedAt = task.startedAt ?? now;
-					task.completedAt = now;
-				}
-				if (task.status === "completed" && fields.status !== "completed") {
-					task.completedAt = undefined;
-				}
-				if (fields.status === "blocked") {
-					task.blockedAt = now;
-				} else if ((task.status as string) === "blocked") {
-					// Was blocked, now transitioning to a different status — clear block metadata
-					task.blockedAt = undefined;
-					if (!fields.blockQuestion) task.blockQuestion = undefined;
-					if (!fields.blockMessageId) task.blockMessageId = undefined;
-				}
-				task.status = fields.status;
-				changedFields.push("status");
+			if (task.status !== "in_progress" && fields.status === "in_progress") task.startedAt = now;
+			if (task.status !== "completed" && fields.status === "completed") {
+				task.startedAt ??= now;
+				task.completedAt = now;
 			}
-			if (fields.content !== undefined) {
-				task.content = fields.content;
-				changedFields.push("content");
+			if (fields.status !== "completed") task.completedAt = undefined;
+			if (fields.status === "blocked") task.blockedAt = now;
+			else if (task.status === "blocked") {
+				task.blockedAt = undefined;
+				if (fields.blockQuestion === undefined) task.blockQuestion = undefined;
+				if (fields.blockMessageId === undefined) task.blockMessageId = undefined;
 			}
-			if (fields.description !== undefined) {
-				task.description = fields.description;
-				changedFields.push("description");
+			task.status = fields.status;
+			changedFields.push("status");
+		}
+		for (const key of [
+			"content",
+			"description",
+			"priority",
+			"activeForm",
+			"owner",
+			"parentId",
+			"groupId",
+			"blockedByGroup",
+			"blockQuestion",
+			"blockMessageId",
+		] as const) {
+			if (fields[key] !== undefined) {
+				(task as any)[key] = fields[key];
+				changedFields.push(key);
 			}
-			if (fields.priority !== undefined) {
-				task.priority = fields.priority;
-				changedFields.push("priority");
+		}
+		if (fields.parentId === id) throw new Error(`#${id} cannot be its own parent`);
+		if (fields.parentId && !this.tasks.has(fields.parentId))
+			throw new Error(`Parent task #${fields.parentId} does not exist`);
+		if (fields.metadata) {
+			for (const [key, value] of Object.entries(fields.metadata)) {
+				if (value === null) delete task.metadata[key];
+				else task.metadata[key] = value;
 			}
-			if (fields.activeForm !== undefined) {
-				task.activeForm = fields.activeForm;
-				changedFields.push("activeForm");
-			}
-			if (fields.owner !== undefined) {
-				task.owner = fields.owner;
-				changedFields.push("owner");
-			}
-			if (fields.parentId !== undefined) {
-				task.parentId = fields.parentId;
-				changedFields.push("parentId");
-			}
-			if (fields.groupId !== undefined) {
-				task.groupId = fields.groupId;
-				changedFields.push("groupId");
-			}
-			if (fields.blockedByGroup !== undefined) {
-				task.blockedByGroup = fields.blockedByGroup;
-				changedFields.push("blockedByGroup");
-			}
-			if (fields.blockQuestion !== undefined) {
-				task.blockQuestion = fields.blockQuestion;
-				changedFields.push("blockQuestion");
-			}
-			if (fields.blockMessageId !== undefined) {
-				task.blockMessageId = fields.blockMessageId;
-				changedFields.push("blockMessageId");
-			}
-
-			if (fields.metadata !== undefined) {
-				for (const [key, value] of Object.entries(fields.metadata)) {
-					if (value === null) delete task.metadata[key];
-					else task.metadata[key] = value;
-				}
-				changedFields.push("metadata");
-			}
-
-			if (fields.addBlocks && fields.addBlocks.length > 0) {
-				for (const targetId of fields.addBlocks) {
-					if (!task.blocks.includes(targetId)) task.blocks.push(targetId);
-					const target = this.tasks.get(targetId);
-					if (target && !target.blockedBy.includes(id)) {
-						target.blockedBy.push(id);
-						target.updatedAt = now;
-					}
-					if (targetId === id) warnings.push(`#${id} blocks itself`);
-					else if (!target) warnings.push(`#${targetId} does not exist`);
-					else if (target.blocks.includes(id)) warnings.push(`cycle: #${id} and #${targetId} block each other`);
-				}
-				changedFields.push("blocks");
-			}
-
-			if (fields.addBlockedBy && fields.addBlockedBy.length > 0) {
-				for (const targetId of fields.addBlockedBy) {
-					if (!task.blockedBy.includes(targetId)) task.blockedBy.push(targetId);
-					const target = this.tasks.get(targetId);
-					if (target && !target.blocks.includes(id)) {
-						target.blocks.push(id);
-						target.updatedAt = now;
-					}
-					if (targetId === id) warnings.push(`#${id} blocks itself`);
-					else if (!target) warnings.push(`#${targetId} does not exist`);
-					else if (task.blocks.includes(targetId))
-						warnings.push(`cycle: #${id} and #${targetId} block each other`);
-				}
-				changedFields.push("blockedBy");
-			}
-
-			task.updatedAt = now;
-			return { task, changedFields, warnings };
-		});
+			changedFields.push("metadata");
+		}
+		for (const targetId of fields.addBlocks ?? []) this.addEdge(id, targetId);
+		for (const blockerId of fields.addBlockedBy ?? []) this.addEdge(blockerId, id);
+		if (fields.addBlocks?.length) changedFields.push("blocks");
+		if (fields.addBlockedBy?.length) changedFields.push("blockedBy");
+		task.updatedAt = now;
+		return { task: cloneTask(task), changedFields, warnings };
 	}
 
-	delete(id: string): boolean {
-		return this.withLock(() => {
-			if (!this.tasks.has(id)) return false;
-			this.tasks.delete(id);
-			for (const t of this.tasks.values()) {
-				t.blocks = t.blocks.filter((bid) => bid !== id);
-				t.blockedBy = t.blockedBy.filter((bid) => bid !== id);
-			}
-			return true;
-		});
+	private addEdge(blockerId: string, blockedId: string): void {
+		if (blockerId === blockedId) throw new Error(`#${blockerId} cannot block itself`);
+		const blocker = this.tasks.get(blockerId);
+		const blocked = this.tasks.get(blockedId);
+		if (!blocker) throw new Error(`#${blockerId} does not exist`);
+		if (!blocked) throw new Error(`#${blockedId} does not exist`);
+		if (!blocker.blocks.includes(blockedId)) blocker.blocks.push(blockedId);
+		if (!blocked.blockedBy.includes(blockerId)) blocked.blockedBy.push(blockerId);
 	}
 
-	removeByIds(ids: string[]): string[] {
-		return this.withLock(() => {
-			const removed: string[] = [];
-			for (const id of ids) {
-				if (this.tasks.has(id)) {
-					this.tasks.delete(id);
-					removed.push(id);
-				}
-			}
-			// Clean up edges
-			if (removed.length > 0) {
-				const removedSet = new Set(removed);
-				for (const t of this.tasks.values()) {
-					t.blocks = t.blocks.filter((bid) => !removedSet.has(bid));
-					t.blockedBy = t.blockedBy.filter((bid) => !removedSet.has(bid));
-				}
-			}
-			return removed;
-		});
+	async delete(id: string, identity?: MutationIdentity): Promise<boolean> {
+		return this.transaction(() => this.deleteUnlocked(id), identity);
 	}
 
-	clearAll(): number {
-		return this.withLock(() => {
+	private deleteUnlocked(id: string): boolean {
+		if (!this.tasks.delete(id)) return false;
+		for (const task of this.tasks.values()) {
+			task.blocks = task.blocks.filter((other) => other !== id);
+			task.blockedBy = task.blockedBy.filter((other) => other !== id);
+		}
+		return true;
+	}
+
+	async removeByIds(ids: string[], identity?: MutationIdentity): Promise<string[]> {
+		return this.transaction(() => ids.filter((id) => this.deleteUnlocked(id)), identity);
+	}
+
+	async clearAll(identity?: MutationIdentity): Promise<number> {
+		return this.transaction(() => {
 			const count = this.tasks.size;
 			this.tasks.clear();
 			return count;
-		});
+		}, identity);
 	}
 
-	clearCompleted(): number {
-		return this.withLock(() => {
-			let count = 0;
-			const toDelete: string[] = [];
-			for (const [id, task] of this.tasks) {
-				if (task.status === "completed") {
-					toDelete.push(id);
-					count++;
-				}
-			}
-			for (const id of toDelete) this.tasks.delete(id);
-			if (count > 0) {
-				const validIds = new Set(this.tasks.keys());
-				for (const t of this.tasks.values()) {
-					t.blocks = t.blocks.filter((bid) => validIds.has(bid));
-					t.blockedBy = t.blockedBy.filter((bid) => validIds.has(bid));
-				}
-			}
-			return count;
-		});
+	async clearCompleted(identity?: MutationIdentity): Promise<number> {
+		return this.transaction(() => {
+			const ids = [...this.tasks.values()].filter((task) => task.status === "completed").map((task) => task.id);
+			for (const id of ids) this.deleteUnlocked(id);
+			return ids.length;
+		}, identity);
 	}
 
 	deleteFileIfEmpty(): boolean {
 		if (!this.filePath || this.tasks.size > 0) return false;
 		try {
 			unlinkSync(this.filePath);
-		} catch {
-			/* ignore */
+		} catch (error: any) {
+			if (error?.code !== "ENOENT") throw error;
 		}
 		return true;
 	}
 
-	/** Apply status transitions and timestamps for bulk writes. */
-	applyStatusTransitions(updated: Task[]): void {
-		const now = Date.now();
+	async applyStatusTransitions(updated: Task[]): Promise<void> {
 		const existing = new Map(this.tasks);
+		const now = Date.now();
 		for (const task of updated) {
-			const prev = existing.get(task.id);
-			if (!prev) {
-				task.createdAt = task.createdAt ?? now;
-				task.updatedAt = now;
-				if (task.status === "in_progress") task.startedAt = now;
-				if (task.status === "completed") {
-					task.startedAt = task.startedAt ?? now;
-					task.completedAt = now;
-				}
-				continue;
-			}
-			task.createdAt = prev.createdAt;
-			task.startedAt = prev.startedAt;
-			task.completedAt = prev.completedAt;
-			task.blocks = task.blocks?.length ? task.blocks : prev.blocks;
-			task.blockedBy = task.blockedBy?.length ? task.blockedBy : prev.blockedBy;
-			task.metadata = task.metadata && Object.keys(task.metadata).length ? task.metadata : prev.metadata;
+			const previous = existing.get(task.id);
+			if (!previous) continue;
+			task.createdAt = previous.createdAt;
 			task.updatedAt = now;
+			task.startedAt = previous.startedAt;
+			task.completedAt = previous.completedAt;
+			if (previous.status !== "in_progress" && task.status === "in_progress") task.startedAt = now;
+			if (previous.status !== "completed" && task.status === "completed") task.completedAt = now;
+			if (task.status !== "completed") task.completedAt = undefined;
+		}
+		await this.setTasks(updated);
+	}
 
-			if (prev.status !== "in_progress" && task.status === "in_progress") task.startedAt = now;
-			if (prev.status !== "completed" && task.status === "completed") {
-				task.startedAt = task.startedAt ?? now;
-				task.completedAt = now;
-			}
-			if (prev.status === "completed" && task.status !== "completed") task.completedAt = undefined;
+	async cleanup(): Promise<void> {
+		await this.mutationQueue;
+		if (!this.lockPath || !existsSync(this.lockPath)) return;
+		try {
+			const pid = Number.parseInt(readFileSync(this.lockPath, "utf8"), 10);
+			if (pid === process.pid) unlinkSync(this.lockPath);
+		} catch {
+			// Best-effort cleanup only.
 		}
 	}
 }

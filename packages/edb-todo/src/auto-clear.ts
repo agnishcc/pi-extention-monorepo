@@ -6,7 +6,7 @@
  * - "on_list_complete": countdown starts when ALL tasks are completed, cleared as a batch
  */
 
-import type { FileTaskStore } from "./file-store.js";
+import type { TaskService } from "./task-service.js";
 
 export type AutoClearMode = "never" | "on_list_complete" | "on_task_complete";
 
@@ -17,7 +17,7 @@ export class AutoClearManager {
 	private allCompletedAtTurn: number | null = null;
 
 	constructor(
-		public getStore: () => FileTaskStore,
+		public getService: () => TaskService,
 		private getMode: () => AutoClearMode,
 		/** How many turns completed tasks linger before auto-clearing. */
 		private clearDelayTurns = 4,
@@ -36,7 +36,7 @@ export class AutoClearManager {
 	}
 
 	private checkAllCompleted(currentTurn: number): void {
-		const tasks = this.getStore().list();
+		const tasks = this.getService().store.list();
 		if (tasks.length > 0 && tasks.every((t) => t.status === "completed")) {
 			if (this.allCompletedAtTurn === null) this.allCompletedAtTurn = currentTurn;
 		} else {
@@ -59,24 +59,25 @@ export class AutoClearManager {
 	 * Called on each turn start. Deletes tasks whose linger period has expired.
 	 * Returns true if any tasks were cleared.
 	 */
-	onTurnStart(currentTurn: number): boolean {
+	async onTurnStart(currentTurn: number): Promise<boolean> {
 		const mode = this.getMode();
 		let cleared = false;
 
 		if (mode === "on_task_complete") {
 			for (const [taskId, turn] of this.completedAtTurn) {
-				const task = this.getStore().get(taskId);
+				const service = this.getService();
+				const task = service.store.get(taskId);
 				if (!task || task.status !== "completed") {
 					this.completedAtTurn.delete(taskId);
 				} else if (currentTurn - turn >= this.clearDelayTurns) {
-					this.getStore().delete(taskId);
+					await service.delete(taskId, { agentId: "root", runId: null });
 					this.completedAtTurn.delete(taskId);
 					cleared = true;
 				}
 			}
 		} else if (mode === "on_list_complete" && this.allCompletedAtTurn !== null) {
 			if (currentTurn - this.allCompletedAtTurn >= this.clearDelayTurns) {
-				this.getStore().clearCompleted();
+				await this.getService().clearCompleted({ agentId: "root", runId: null });
 				this.allCompletedAtTurn = null;
 				cleared = true;
 			}
