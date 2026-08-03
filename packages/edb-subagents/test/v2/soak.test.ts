@@ -174,7 +174,10 @@ describe("V2 soak scenarios", () => {
 				),
 			"depth soak failed",
 		);
-		expect(rootMessages.some((message) => message.includes("completed — use get_subagent_result"))).toBe(true);
+		await waitFor(
+			() => rootMessages.some((message) => message.includes("completed — use get_subagent_result")),
+			"root did not receive the completion notification",
+		);
 		expect(rootMessages.some((message) => message.includes("completed depth 1"))).toBe(false);
 		expect(coordinator.registry.depth(coordinator.registry.descendants("root").at(-1)!.id)).toBe(4);
 		expect(maximumActive).toBe(1);
