@@ -1,6 +1,8 @@
 # Changelog
 
-## [0.19.0] - 2026-08-03
+## [Unreleased]
+
+0.19.0] - 2026-08-03
 
 ### Added
 - **Subagent system V2** (`src/v2`, opt-in via `subagents.engine: "v2"`) — recursive agent tree with persistent reusable sessions, parent/child question routing with escalation to the human, logical foreground/background waiting, steering, follow-up, bounded concurrency, atomic state persistence, durable outbox and crash recovery.

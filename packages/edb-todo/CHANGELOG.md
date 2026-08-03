@@ -1,6 +1,8 @@
 # Changelog
 
-## [0.19.0] - 2026-08-03
+## [Unreleased]
+
+0.19.0] - 2026-08-03
 
 ### Added
 - `TaskService` application layer shared by the existing tools and the new versioned RPC server (`edb:todo:v1:*` events).
