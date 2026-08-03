@@ -121,7 +121,9 @@ describe("recursive logical coordination", () => {
 			rootAdapter: {
 				deliver(content: string) {
 					rootMessages.push(content);
-					if (content.includes("A received B result")) finalResult.resolve();
+					const runId = content.match(/run (run_\S+)/)?.[1];
+					const run = runId ? coordinator.registry.runs.get(runId) : undefined;
+					if (run?.result?.text === "A received B result") finalResult.resolve();
 				},
 			} as any,
 			todoClient,
@@ -143,7 +145,11 @@ describe("recursive logical coordination", () => {
 		expect(coordinator.listQuestions()).toEqual([
 			expect.objectContaining({ text: "Which color?", state: "answered", answer: "cobalt" }),
 		]);
-		expect(rootMessages.some((message) => message.includes("A received B result"))).toBe(true);
+		expect(rootMessages.some((message) => message.includes("completed — use get_subagent_result"))).toBe(true);
+		expect([...coordinator.registry.runs.values()].some((run) => run.result?.text === "A received B result")).toBe(
+			true,
+		);
+		expect(rootMessages.some((message) => message.includes("A received B result"))).toBe(false);
 		await coordinator.shutdown("session_shutdown");
 	});
 });

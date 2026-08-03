@@ -222,9 +222,15 @@ describe("V2 final acceptance", () => {
 		await coordinator.steer(rootCaller, originalAgentId, "include verification");
 		releaseB.resolve();
 		await waitFor(
-			() => rootMessages.some((message) => message.includes("A completed after B")),
-			"root did not receive A result",
+			() => rootMessages.some((message) => message.includes("completed — use get_subagent_result")),
+			"root did not receive the completion notification",
 		);
+		// The result is no longer embedded in the notification; it is retrievable via get_subagent_result.
+		const aRun = [...coordinator.registry.runs.values()].find(
+			(run) => run.agentId === originalAgentId && run.state === "completed",
+		);
+		expect(aRun?.result?.text).toBe("A completed after B");
+		expect(rootMessages.some((message) => message.includes("A completed after B"))).toBe(false);
 		await waitFor(
 			() => todo.tasks.get("T1")?.status === "completed" && todo.tasks.get("T2")?.status === "completed",
 			"tasks did not complete",
@@ -235,9 +241,13 @@ describe("V2 final acceptance", () => {
 
 		await coordinator.sendFollowup(rootCaller, originalAgentId, "What context do you retain?");
 		await waitFor(
-			() => rootMessages.some((message) => message.includes("follow-up retained original context")),
+			() =>
+				[...coordinator.registry.runs.values()].some(
+					(run) => run.agentId === originalAgentId && run.result?.text === "A follow-up retained original context",
+				),
 			"first follow-up did not complete",
 		);
+		expect(rootMessages.some((message) => message.includes("follow-up retained original context"))).toBe(false);
 		await coordinator.shutdown("session_shutdown");
 
 		const resumedMessages: string[] = [];
@@ -265,7 +275,10 @@ describe("V2 final acceptance", () => {
 		expect(resumed.registry.getAgent(originalAgentId).state).toBe("idle");
 		await resumed.sendFollowup(resumed.caller("root", new AbortController().signal), originalAgentId, "Answer again");
 		await waitFor(
-			() => resumedMessages.some((message) => message.includes("after coordinator recovery")),
+			() =>
+				[...resumed.registry.runs.values()].some(
+					(run) => run.agentId === originalAgentId && run.result?.text === "A answered after coordinator recovery",
+				),
 			"recovered follow-up failed",
 		);
 		expect(resumed.registry.getAgent(originalAgentId).id).toBe(originalAgentId);

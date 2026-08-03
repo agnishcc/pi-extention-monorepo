@@ -163,7 +163,19 @@ describe("V2 soak scenarios", () => {
 			subagent_type: "coder",
 			agent_name: "depth-1",
 		});
-		await waitFor(() => rootMessages.some((message) => message.includes("completed depth 1")), "depth soak failed");
+		const depth1Agent = [...coordinator.registry.agents.values()].find((agent) => agent.displayName === "depth-1")!;
+		await waitFor(
+			() =>
+				[...coordinator.registry.runs.values()].some(
+					(run) =>
+						run.agentId === depth1Agent.id &&
+						run.state === "completed" &&
+						run.result?.text === "completed depth 1",
+				),
+			"depth soak failed",
+		);
+		expect(rootMessages.some((message) => message.includes("completed — use get_subagent_result"))).toBe(true);
+		expect(rootMessages.some((message) => message.includes("completed depth 1"))).toBe(false);
 		expect(coordinator.registry.depth(coordinator.registry.descendants("root").at(-1)!.id)).toBe(4);
 		expect(maximumActive).toBe(1);
 		await coordinator.shutdown("session_shutdown");
