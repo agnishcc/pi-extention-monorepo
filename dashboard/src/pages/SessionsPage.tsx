@@ -91,13 +91,13 @@ export const SessionsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1C1D22] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1C1D22] pb-4">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-[#5E6AD2]" />
             Sessions & Transcript Logs
           </h2>
-          <p className="text-xs text-slate-500 font-mono mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
             JSONL transcript reader from <code className="text-slate-400">~/.pi/agent/sessions/</code>
           </p>
         </div>
@@ -130,12 +130,12 @@ export const SessionsPage: React.FC = () => {
               <div
                 key={s.sessionId}
                 onClick={() => setSelectedSessionId(s.sessionId)}
-                className="p-3.5 hover:bg-[#16171B] transition-colors cursor-pointer flex flex-wrap items-center justify-between gap-4 group"
+                className="p-3.5 hover:bg-[#16171B] transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
               >
                 <div className="space-y-1 max-w-xl">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-white group-hover:text-[#5E6AD2] transition-colors">
-                      {s.sessionId.length > 36 ? `${s.sessionId.slice(0, 36)}…` : s.sessionId}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs font-semibold text-white group-hover:text-[#5E6AD2] transition-colors truncate max-w-[200px] sm:max-w-xs md:max-w-md">
+                      {s.sessionId}
                     </span>
                     <span className="text-[10px] bg-[#1C1D22] text-slate-400 px-1.5 py-0.2 rounded font-mono border border-[#2A2B33]">
                       {s.turnCount} turns
@@ -169,8 +169,8 @@ export const SessionsPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="text-right font-mono">
+                <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#1C1D22]">
+                  <div className="text-left sm:text-right font-mono">
                     <div className="text-xs font-bold text-[#26B574]">
                       ${s.totalCost.toFixed(2)}
                     </div>
@@ -185,7 +185,7 @@ export const SessionsPage: React.FC = () => {
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between pt-2 text-xs font-mono">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 text-xs font-mono">
             <span className="text-slate-500">
               Page <span className="text-white font-bold">{page}</span> of <span className="text-white font-bold">{totalPages}</span>
             </span>
@@ -193,14 +193,14 @@ export const SessionsPage: React.FC = () => {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2.5 py-1 rounded bg-[#111215] border border-[#22232A] text-slate-300 disabled:opacity-30 hover:bg-[#1C1D22] transition-colors"
+                className="px-3 py-1 rounded bg-[#111215] border border-[#22232A] text-slate-300 disabled:opacity-30 hover:bg-[#1C1D22] transition-colors"
               >
                 Prev
               </button>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="px-2.5 py-1 rounded bg-[#111215] border border-[#22232A] text-slate-300 disabled:opacity-30 hover:bg-[#1C1D22] transition-colors"
+                className="px-3 py-1 rounded bg-[#111215] border border-[#22232A] text-slate-300 disabled:opacity-30 hover:bg-[#1C1D22] transition-colors"
               >
                 Next
               </button>
@@ -212,7 +212,7 @@ export const SessionsPage: React.FC = () => {
       {/* Transcript Drawer Modal */}
       {selectedSessionId && (
         <div className="fixed inset-0 bg-black/80 z-50 flex justify-end animate-fadeIn">
-          <div className="w-full max-w-3xl bg-[#0B0C0E] border-l border-[#1C1D22] h-full flex flex-col shadow-2xl">
+          <div className="w-full sm:max-w-3xl bg-[#0B0C0E] border-l border-[#1C1D22] h-full flex flex-col shadow-2xl">
             {/* Modal Header */}
             <div className="p-4 border-b border-[#1C1D22] flex items-center justify-between bg-[#111215]">
               <div className="space-y-0.5 font-mono">

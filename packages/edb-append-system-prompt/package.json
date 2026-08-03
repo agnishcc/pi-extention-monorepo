@@ -1,7 +1,7 @@
 {
 	"name": "@agnishc/edb-append-system-prompt",
 	"version": "0.20.0",
-	"description": "Pi extension: manage per-session system prompt snippets with add/delete UI",
+	"description": "Pi extension: set a per-session system prompt injection with enable/disable toggle",
 	"keywords": [
 		"pi-package",
 		"pi-extension",

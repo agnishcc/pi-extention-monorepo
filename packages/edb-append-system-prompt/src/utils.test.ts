@@ -1,48 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { formatAge, wordCount } from "./utils.js";
+import { activeInjectionText, statusIndicator } from "./utils.js";
 
-describe("formatAge", () => {
-	it("formats seconds", () => {
-		const now = Date.now();
-		expect(formatAge(now - 0)).toBe("0s ago");
-		expect(formatAge(now - 30 * 1000)).toBe("30s ago");
+describe("activeInjectionText", () => {
+	it("returns empty when disabled", () => {
+		expect(activeInjectionText({ text: "hello", enabled: false })).toBe("");
 	});
 
-	it("formats minutes", () => {
-		const now = Date.now();
-		expect(formatAge(now - 60 * 1000)).toBe("1m ago");
-		expect(formatAge(now - 5 * 60 * 1000)).toBe("5m ago");
+	it("returns empty when enabled but text is empty", () => {
+		expect(activeInjectionText({ text: "", enabled: true })).toBe("");
 	});
 
-	it("formats hours", () => {
-		const now = Date.now();
-		expect(formatAge(now - 3600 * 1000)).toBe("1h ago");
-		expect(formatAge(now - 12 * 3600 * 1000)).toBe("12h ago");
+	it("returns empty when enabled but text is whitespace", () => {
+		expect(activeInjectionText({ text: "   \n\t ", enabled: true })).toBe("");
 	});
 
-	it("formats days", () => {
-		const now = Date.now();
-		expect(formatAge(now - 86400 * 1000)).toBe("1d ago");
-		expect(formatAge(now - 7 * 86400 * 1000)).toBe("7d ago");
+	it("returns the trimmed text when enabled", () => {
+		expect(activeInjectionText({ text: "  be helpful  ", enabled: true })).toBe("be helpful");
 	});
 });
 
-describe("wordCount", () => {
-	it("counts words", () => {
-		expect(wordCount("hello world")).toBe(2);
-		expect(wordCount("one two three")).toBe(3);
+describe("statusIndicator", () => {
+	it("returns undefined when text is empty", () => {
+		expect(statusIndicator({ text: "", enabled: true })).toBeUndefined();
+		expect(statusIndicator({ text: "  ", enabled: false })).toBeUndefined();
 	});
 
-	it("ignores extra whitespace", () => {
-		expect(wordCount("  hello   world  ")).toBe(2);
+	it("returns the active label when enabled", () => {
+		expect(statusIndicator({ text: "be helpful", enabled: true })).toBe("⊕ inject on");
 	});
 
-	it("returns 0 for empty string", () => {
-		expect(wordCount("")).toBe(0);
-		expect(wordCount("   ")).toBe(0);
-	});
-
-	it("handles newline-separated words", () => {
-		expect(wordCount("hello\nworld")).toBe(2);
+	it("returns the muted label when disabled but set", () => {
+		expect(statusIndicator({ text: "be helpful", enabled: false })).toBe("○ inject off");
 	});
 });

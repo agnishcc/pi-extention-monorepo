@@ -1,11 +1,12 @@
 # Changelog
 
-## [0.20.0] - 2026-08-03
-
-
 ## [Unreleased]
 
-0.19.0] - 2026-08-03
+### Changed
+- Reworked to a single system-prompt injection with an enable/disable toggle
+- `/prompt-inject` now opens an overlay with one input field and a toggle button (was: multi-snippet add/delete list)
+
+## [0.19.0] - 2026-08-03
 
 ## [0.17.0] - 2026-07-27
 

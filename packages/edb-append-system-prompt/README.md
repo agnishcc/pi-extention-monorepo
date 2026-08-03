@@ -1,14 +1,13 @@
 # @agnishc/edb-append-system-prompt
 
-A Pi CLI extension that lets you build up a list of system-prompt snippets that are appended to every agent turn in the current session.
+A Pi CLI extension that sets a single system-prompt injection for the current session.
 
 ## Features
 
-- **Always appends** — snippets accumulate as a list, never replace the base prompt
-- **Confirm before adding** — shows the exact text in a confirm dialog before saving
-- **Status bar indicator** — `⊕ N snippets` shown when active snippets exist
-- **Delete individual snippets** — select and delete from the list view
-- **Persists across `/reload`** — stored in session history, survives extension reloads
+- **One injection** — a single snippet appended to the system prompt before every agent turn
+- **Toggle button in the popup** — Tab to it, Enter / Space flips enable / disable
+- **Input field** — write anything; saved trimmed, exactly as typed otherwise
+- **Persists across `/reload`** — stored in session history, scoped to the current session only
 
 ## Install
 
@@ -19,13 +18,17 @@ pi install npm:@agnishc/edb-append-system-prompt
 ## Usage
 
 ```
-/sys-prompt
+/prompt-inject
 ```
 
-Opens an overlay with two modes:
+Opens an overlay with an input field and a toggle button:
 
-- **Compose mode** — write a snippet, press Enter to add (with confirm dialog)
-- **List mode** — browse existing snippets, press `d` to delete selected
+- Type your snippet in the text field
+- **Tab** moves focus to the toggle button; **Enter** / **Space** flips it on / off
+- **Tab** back to the text field and press **Enter** to save
+- **Esc** closes without saving
+
+While enabled, the snippet is appended to the system prompt before every agent turn. The status bar shows `⊕ inject on` when active and `○ inject off` when set but disabled.
 
 ## License
 

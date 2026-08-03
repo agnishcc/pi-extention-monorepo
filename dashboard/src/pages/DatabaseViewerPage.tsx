@@ -145,39 +145,39 @@ export const DatabaseViewerPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Banner & Stats Overview */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#141519] border border-[#23252E] rounded-xl p-5 shadow-lg">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-            <Database className="w-6 h-6" />
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-[#141519] border border-[#23252E] rounded-xl p-4 sm:p-5 shadow-lg">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+            <Database className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white tracking-tight">Postgres Database Viewer</h1>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-base sm:text-lg font-bold text-white tracking-tight">Postgres Database Viewer</h1>
               <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" /> PostgreSQL
               </span>
             </div>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-400 font-mono mt-0.5 truncate" title={stats?.dbPath || '~/.pi/token-usage.db'}>
               {stats?.dbPath || '~/.pi/token-usage.db'}
             </p>
           </div>
         </div>
 
         {/* Quick DB Stats Pills */}
-        <div className="flex items-center gap-3">
-          <div className="bg-[#1C1D24] border border-[#282A36] px-3 py-1.5 rounded-lg">
-            <div className="text-[10px] font-mono text-slate-400">DB Size</div>
-            <div className="text-sm font-mono font-bold text-white">{stats?.fileSizeFormatted || '0 MB'}</div>
+        <div className="grid grid-cols-3 gap-2 w-full md:w-auto">
+          <div className="bg-[#1C1D24] border border-[#282A36] px-2.5 py-1.5 rounded-lg text-center md:text-left">
+            <div className="text-[9px] sm:text-[10px] font-mono text-slate-400">DB Size</div>
+            <div className="text-xs sm:text-sm font-mono font-bold text-white">{stats?.fileSizeFormatted || '0 MB'}</div>
           </div>
-          <div className="bg-[#1C1D24] border border-[#282A36] px-3 py-1.5 rounded-lg">
-            <div className="text-[10px] font-mono text-slate-400">Total Rows</div>
-            <div className="text-sm font-mono font-bold text-indigo-400">
+          <div className="bg-[#1C1D24] border border-[#282A36] px-2.5 py-1.5 rounded-lg text-center md:text-left">
+            <div className="text-[9px] sm:text-[10px] font-mono text-slate-400">Total Rows</div>
+            <div className="text-xs sm:text-sm font-mono font-bold text-indigo-400">
               {stats?.totalRows ? stats.totalRows.toLocaleString() : '0'}
             </div>
           </div>
-          <div className="bg-[#1C1D24] border border-[#282A36] px-3 py-1.5 rounded-lg">
-            <div className="text-[10px] font-mono text-slate-400">Integrity</div>
-            <div className="text-sm font-mono font-bold text-emerald-400 uppercase">
+          <div className="bg-[#1C1D24] border border-[#282A36] px-2.5 py-1.5 rounded-lg text-center md:text-left">
+            <div className="text-[9px] sm:text-[10px] font-mono text-slate-400">Integrity</div>
+            <div className="text-xs sm:text-sm font-mono font-bold text-emerald-400 uppercase">
               {stats?.integrityStatus || 'OK'}
             </div>
           </div>
@@ -185,10 +185,10 @@ export const DatabaseViewerPage: React.FC = () => {
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center border-b border-[#23252E] gap-2">
+      <div className="flex items-center border-b border-[#23252E] gap-1 sm:gap-2 overflow-x-auto scrollbar-none flex-nowrap">
         <button
           onClick={() => setActiveTab('explorer')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'explorer'
               ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -200,7 +200,7 @@ export const DatabaseViewerPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('sql')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'sql'
               ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -212,7 +212,7 @@ export const DatabaseViewerPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('health')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2.5 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
             activeTab === 'health'
               ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -227,7 +227,7 @@ export const DatabaseViewerPage: React.FC = () => {
       {activeTab === 'explorer' && (
         <div className="space-y-4">
           {/* Controls Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-[#141519] border border-[#23252E] p-3 rounded-xl">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#141519] border border-[#23252E] p-3 rounded-xl">
             <div className="flex items-center gap-2 flex-1 min-w-[240px]">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
@@ -272,7 +272,7 @@ export const DatabaseViewerPage: React.FC = () => {
           {/* Table */}
           <div className="bg-[#141519] border border-[#23252E] rounded-xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead>
                   <tr className="bg-[#181920] border-b border-[#23252E] text-[11px] font-mono text-slate-400 uppercase tracking-wider">
                     <th

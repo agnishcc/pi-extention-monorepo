@@ -1,13 +1,13 @@
-// ── Utils ──────────────────────────────────────────────────────────────────────
+// ── Injection helpers ──────────────────────────────────────────────────────────
 
-export function formatAge(ts: number): string {
-	const s = Math.floor((Date.now() - ts) / 1000);
-	if (s < 60) return `${s}s ago`;
-	if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-	if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-	return `${Math.floor(s / 86400)}d ago`;
+/** The text to inject this turn, or "" when disabled or empty. */
+export function activeInjectionText(state: { text: string; enabled: boolean }): string {
+	if (!state.enabled) return "";
+	return state.text.trim();
 }
 
-export function wordCount(text: string): number {
-	return text.trim().split(/\s+/).filter(Boolean).length;
+/** Status-bar label: undefined when empty, "○ inject off" when set-but-disabled, "⊕ inject on" when active. */
+export function statusIndicator(state: { text: string; enabled: boolean }): string | undefined {
+	if (state.text.trim().length === 0) return undefined;
+	return state.enabled ? "⊕ inject on" : "○ inject off";
 }

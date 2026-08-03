@@ -1,52 +1,46 @@
-import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { Snippet } from "./types";
+import type { PromptState } from "./types";
+import { statusIndicator } from "./utils";
 
 // ── Module state ───────────────────────────────────────────────────────────────
 
-export let snippets: Snippet[] = [];
+export let state: PromptState = { text: "", enabled: false };
 
 export const STATUS_KEY = "prompt-inject";
-export const ENTRY_TYPE = "sys-prompt-snippets";
+export const ENTRY_TYPE = "sys-prompt-injection";
 
 // ── State helpers ──────────────────────────────────────────────────────────────
 
-export function addSnippet(text: string): void {
-	snippets.push({ id: randomUUID(), text: text.trim(), createdAt: Date.now() });
-}
-
-export function removeSnippet(id: string): void {
-	snippets = snippets.filter((s) => s.id !== id);
-}
-
-export function setSnippets(next: Snippet[]): void {
-	snippets = next;
+export function setState(next: PromptState): void {
+	state = { text: next.text, enabled: next.enabled };
 }
 
 // ── Session persistence ────────────────────────────────────────────────────────
 
-export function loadFromSession(ctx: any): Snippet[] {
+export function loadFromSession(ctx: any): PromptState | undefined {
 	const entries: any[] = ctx.sessionManager.getEntries();
 	for (let i = entries.length - 1; i >= 0; i--) {
 		const e = entries[i];
 		if (e.type === "custom" && e.customType === ENTRY_TYPE) {
-			return (e.data?.snippets as Snippet[]) ?? [];
+			const d = e.data as Partial<PromptState> | undefined;
+			if (d) return { text: typeof d.text === "string" ? d.text : "", enabled: d.enabled === true };
 		}
 	}
-	return [];
+	return undefined;
 }
 
-export function persistSnippets(pi: ExtensionAPI): void {
-	pi.appendEntry(ENTRY_TYPE, { snippets });
+export function persistState(pi: ExtensionAPI): void {
+	pi.appendEntry(ENTRY_TYPE, state);
 }
 
 // ── Status bar ─────────────────────────────────────────────────────────────────
 
 export function updateStatusBar(ctx: any): void {
-	if (snippets.length === 0) {
+	const label = statusIndicator(state);
+	if (!label) {
 		ctx.ui.setStatus(STATUS_KEY, undefined);
 		return;
 	}
-	const label = String(snippets.length);
-	ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg("accent", `⊕ ${label}`));
+	const color = state.enabled ? "accent" : "muted";
+	ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg(color, label));
 }

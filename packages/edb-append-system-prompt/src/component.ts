@@ -1,23 +1,12 @@
-import {
-	Editor,
-	type EditorTheme,
-	Key,
-	matchesKey,
-	type SelectItem,
-	SelectList,
-	truncateToWidth,
-	visibleWidth,
-} from "@earendil-works/pi-tui";
-import { snippets } from "./state";
-import type { OverlayAction } from "./types";
-import { formatAge, wordCount } from "./utils";
+import { Editor, type EditorTheme, Key, matchesKey, visibleWidth } from "@earendil-works/pi-tui";
+import type { PromptState } from "./types";
 
 // ── Overlay launcher ───────────────────────────────────────────────────────────
 
-export function openOverlay(ctx: any, prefillText?: string): Promise<OverlayAction | undefined> {
+export function openOverlay(ctx: any, current: PromptState): Promise<PromptState | undefined> {
 	return (ctx.ui as any).custom(
-		(tui: any, theme: any, _kb: any, done: (result?: OverlayAction) => void) =>
-			createComponent(tui, theme, done, prefillText),
+		(tui: any, theme: any, _kb: any, done: (result?: PromptState) => void) =>
+			createComponent(tui, theme, done, current),
 		{
 			overlay: true,
 			overlayOptions: {
@@ -31,16 +20,17 @@ export function openOverlay(ctx: any, prefillText?: string): Promise<OverlayActi
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-type Mode = "list" | "composing";
+type Focus = "editor" | "toggle";
 
-export function createComponent(tui: any, theme: any, done: (result?: OverlayAction) => void, prefillText?: string) {
+export function createComponent(tui: any, theme: any, done: (result?: PromptState) => void, current: PromptState) {
 	const dim = (s: string) => theme.fg("dim", s);
 	const accent = (s: string) => theme.fg("accent", s);
 	const muted = (s: string) => theme.fg("muted", s);
 
-	let mode: Mode = snippets.length === 0 ? "composing" : "list";
+	let enabled = current.enabled;
+	let focus: Focus = "editor";
 
-	// ── Editor (composing mode) ────────────────────────────────────────────
+	// ── Editor (input field) ────────────────────────────────────────────────
 	const editorTheme: EditorTheme = {
 		borderColor: (s) => theme.fg("accent", s),
 		selectList: {
@@ -53,72 +43,47 @@ export function createComponent(tui: any, theme: any, done: (result?: OverlayAct
 	};
 	const editor = new Editor(tui, editorTheme);
 	editor.focused = true;
-	if (prefillText) editor.setText(prefillText);
+	editor.setText(current.text);
 
 	editor.onSubmit = (text) => {
-		const trimmed = text.trim();
-		if (trimmed) {
-			done({ type: "add", text: trimmed });
-		} else if (snippets.length > 0) {
-			mode = "list";
-			tui.requestRender();
-		} else {
-			done();
-		}
+		done({ text: text.trim(), enabled });
 	};
-
-	// ── SelectList (list mode) ─────────────────────────────────────────────
-	const selectTheme = {
-		selectedPrefix: (t: string) => theme.fg("accent", t),
-		selectedText: (t: string) => theme.fg("accent", t),
-		description: (t: string) => theme.fg("dim", t),
-		scrollInfo: (t: string) => theme.fg("dim", t),
-		noMatch: (t: string) => theme.fg("warning", t),
-	};
-
-	function buildItems(): SelectItem[] {
-		const items: SelectItem[] = [{ value: "__add__", label: accent("＋ Add new snippet"), description: "" }];
-		for (const s of snippets) {
-			const preview = s.text.replace(/\n/g, " ");
-			items.push({
-				value: s.id,
-				label: truncateToWidth(preview, 55),
-				description: `${formatAge(s.createdAt)}  ·  ${wordCount(s.text)} words`,
-			});
-		}
-		return items;
-	}
-
-	const list = new SelectList(buildItems(), 12, selectTheme);
 
 	// ── Rendering ──────────────────────────────────────────────────────────
 
 	function renderHeader(width: number): string[] {
-		const title = theme.bold(accent(" ✦ System Prompt Snippets"));
-		const count = snippets.length === 0 ? muted("none active") : accent(`${snippets.length} active`);
-		const gap = Math.max(2, width - visibleWidth(" ✦ System Prompt Snippets") - visibleWidth(count) - 1);
-		return [title + " ".repeat(gap) + count];
+		const title = theme.bold(accent(" ✦ System Prompt Injection"));
+		const badge = enabled ? accent("● on") : muted("○ off");
+		const gap = Math.max(2, width - visibleWidth(" ✦ System Prompt Injection") - visibleWidth(badge) - 1);
+		return [title + " ".repeat(gap) + badge];
+	}
+
+	function renderToggleLine(): string {
+		const cursor = focus === "toggle" ? theme.fg("accent", "▸") : " ";
+		const dot = enabled ? accent("●") : dim("○");
+		const stateLabel = enabled ? accent(" Enabled") : muted(" Disabled");
+		const desc = enabled ? "text is injected into the system prompt" : "text is not injected";
+		return ` ${cursor} ${dot}${stateLabel}  ${dim(desc)}`;
 	}
 
 	function renderBody(width: number): string[] {
-		if (mode === "composing") {
-			const lines: string[] = [];
-			lines.push(dim("  Write your system prompt addition:"));
-			lines.push("");
-			for (const line of editor.render(width - 2)) {
-				lines.push(` ${line}`);
-			}
-			return lines;
+		const lines: string[] = [];
+		lines.push(dim("  Write what should be added to the system prompt:"));
+		lines.push("");
+		for (const line of editor.render(width - 2)) {
+			lines.push(` ${line}`);
 		}
-		return list.render(width);
+		lines.push("");
+		lines.push(renderToggleLine());
+		return lines;
 	}
 
 	function renderFooter(width: number): string[] {
 		const divider = dim("─".repeat(width));
-		if (mode === "composing") {
-			return [divider, dim(`  Enter submit  ·  Esc ${snippets.length > 0 ? "back to list" : "close"}`)];
+		if (focus === "toggle") {
+			return [divider, dim("  Enter / Space toggle  ·  Tab to text field  ·  Esc close")];
 		}
-		return [divider, dim("  ↑↓ navigate  ·  Enter select  ·  d delete selected  ·  Esc close")];
+		return [divider, dim("  Enter save  ·  Tab to toggle  ·  Esc close")];
 	}
 
 	// ── Input handling ─────────────────────────────────────────────────────
@@ -129,58 +94,29 @@ export function createComponent(tui: any, theme: any, done: (result?: OverlayAct
 		},
 
 		handleInput(data: string): void {
-			if (mode === "composing") {
-				if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
-					if (snippets.length > 0) {
-						mode = "list";
-						tui.requestRender();
-					} else {
-						done();
-					}
-					return;
-				}
-				editor.handleInput(data);
-				tui.requestRender();
-				return;
-			}
-
-			// list mode
 			if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
 				done();
 				return;
 			}
 
-			if (data === "d") {
-				const sel = list.getSelectedItem();
-				if (sel && sel.value !== "__add__") {
-					const snippet = snippets.find((s) => s.id === sel.value);
-					if (snippet) done({ type: "delete", id: snippet.id, text: snippet.text });
-				}
+			// Tab moves focus between the text field and the toggle button.
+			// Free in the editor: without an autocompleteProvider, its tab handler no-ops.
+			if (matchesKey(data, Key.tab)) {
+				focus = focus === "editor" ? "toggle" : "editor";
+				editor.focused = focus === "editor";
+				tui.requestRender();
 				return;
 			}
 
-			if (matchesKey(data, Key.enter) || matchesKey(data, Key.return)) {
-				const sel = list.getSelectedItem();
-				if (!sel) return;
-				if (sel.value === "__add__") {
-					mode = "composing";
-					editor.setText("");
-					editor.focused = true;
-					tui.requestRender();
-				} else {
-					const snippet = snippets.find((s) => s.id === sel.value);
-					if (snippet) done({ type: "delete", id: snippet.id, text: snippet.text });
-				}
+			if (focus === "editor") {
+				editor.handleInput(data);
+				tui.requestRender();
 				return;
 			}
 
-			if (
-				matchesKey(data, Key.up) ||
-				matchesKey(data, Key.down) ||
-				matchesKey(data, Key.pageUp) ||
-				matchesKey(data, Key.pageDown)
-			) {
-				list.handleInput(data);
+			// Toggle button focus
+			if (matchesKey(data, Key.enter) || matchesKey(data, Key.return) || matchesKey(data, Key.space)) {
+				enabled = !enabled;
 				tui.requestRender();
 				return;
 			}
@@ -188,7 +124,6 @@ export function createComponent(tui: any, theme: any, done: (result?: OverlayAct
 
 		invalidate(): void {
 			editor.invalidate?.();
-			list.invalidate();
 		},
 	};
 }

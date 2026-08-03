@@ -81,7 +81,7 @@ export const TopModelsCard: React.FC<TopModelsCardProps> = ({ timeframe }) => {
                       <span className="text-slate-600 font-mono text-[10px] w-3">#{idx + 1}</span>
                       <ProviderLogo logo={m.logo} name={m.providerName} size="sm" />
                       <span className="text-slate-200 truncate font-medium text-[11px]">{m.displayName}</span>
-                      <span className="text-[9px] text-slate-500 font-mono">({m.providerName})</span>
+                      <span className="text-[9px] text-slate-500 font-mono hidden sm:inline">({m.providerName})</span>
                     </div>
                     <div className="font-mono text-[#26B574] font-semibold text-[11px]">${(m.cost || 0).toFixed(2)}</div>
                   </div>
@@ -125,7 +125,7 @@ export const TopModelsCard: React.FC<TopModelsCardProps> = ({ timeframe }) => {
                       <span className="text-slate-600 font-mono text-[10px] w-3">#{idx + 1}</span>
                       <ProviderLogo logo={m.logo} name={m.providerName} size="sm" />
                       <span className="text-slate-200 truncate font-medium text-[11px]">{m.displayName}</span>
-                      <span className="text-[9px] text-slate-500 font-mono">{m.turns} turns</span>
+                      <span className="text-[9px] text-slate-500 font-mono hidden sm:inline">{m.turns} turns</span>
                     </div>
                     <div className="font-mono text-[#5E6AD2] font-semibold text-[11px]">{formatTokens(m.totalTokens)}</div>
                   </div>

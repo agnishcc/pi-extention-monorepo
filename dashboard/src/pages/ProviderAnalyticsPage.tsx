@@ -41,16 +41,16 @@ export const ProviderAnalyticsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="border-b border-[#1C1D22] pb-4">
-        <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+        <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
           <Building2 className="w-5 h-5 text-[#5E6AD2]" />
           Provider Market Share
         </h2>
-        <p className="text-xs text-slate-500 font-mono mt-0.5">
+        <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
           Cost allocation across Anthropic, OpenAI, Google, DeepSeek, OpenRouter
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {providers.map((p) => {
           const pct = Math.round((p.totalCost / totalSpentAll) * 100);
           return (
@@ -81,7 +81,7 @@ export const ProviderAnalyticsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#1C1D22] text-[11px] font-mono text-slate-400">
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#1C1D22] text-[10px] sm:text-[11px] font-mono text-slate-400">
                 <div>
                   <div className="text-[9px] text-slate-500">Turns</div>
                   <div className="font-bold text-slate-200">{p.turns.toLocaleString()}</div>

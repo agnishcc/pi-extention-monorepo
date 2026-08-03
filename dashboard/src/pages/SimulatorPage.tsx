@@ -163,27 +163,27 @@ export const SimulatorPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1C1D22] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1C1D22] pb-4">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <Calculator className="w-5 h-5 text-[#5E6AD2]" />
             "What If" Cost Simulator
           </h2>
-          <p className="text-xs text-slate-500 font-mono mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
             Search 5,700+ catalog models to recalculate past session expenditure
           </p>
         </div>
 
         {/* Global Timeframe Selector */}
-        <div className="bg-[#111215] p-0.5 rounded-md border border-[#22232A] flex items-center gap-1 text-[11px] font-mono">
-          <div className="px-2 py-1 text-slate-500 text-[10px] flex items-center gap-1 border-r border-[#1C1D22]">
+        <div className="bg-[#111215] p-0.5 rounded-md border border-[#22232A] flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-mono overflow-x-auto self-start sm:self-auto">
+          <div className="px-1.5 sm:px-2 py-1 text-slate-500 text-[10px] flex items-center gap-1 border-r border-[#1C1D22] shrink-0">
             <Clock className="w-3 h-3 text-[#5E6AD2]" /> Period:
           </div>
           {(['all', 'monthly', 'weekly', 'daily'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTimeframe(t)}
-              className={`px-3 py-1 rounded font-medium transition-all ${
+              className={`px-2 sm:px-3 py-1 rounded font-medium transition-all shrink-0 ${
                 timeframe === t
                   ? 'bg-[#1C1D22] text-white border border-[#2E2F38]'
                   : 'text-slate-500 hover:text-slate-300'
@@ -197,7 +197,7 @@ export const SimulatorPage: React.FC = () => {
 
       {/* Model Search & Presets Bar */}
       <div className="p-4 rounded-lg bg-[#111215] border border-[#22232A] space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <label className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400">
             Search Candidate Model
           </label>
@@ -248,7 +248,7 @@ export const SimulatorPage: React.FC = () => {
 
         {/* Popular Presets Pills */}
         <div className="flex flex-wrap items-center gap-2 pt-1 font-mono text-xs">
-          <span className="text-[10px] text-slate-500 uppercase">Popular Presets:</span>
+          <span className="text-[10px] text-slate-500 uppercase w-full sm:w-auto">Popular Presets:</span>
           {PRESET_MODELS.map((m) => {
             const isSelected = selectedModel.id === m.id;
             return (
@@ -270,7 +270,7 @@ export const SimulatorPage: React.FC = () => {
       </div>
 
       {/* Selected Model Details & Simulation Summary Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 font-mono">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 font-mono">
         {/* Selected Target Model Card */}
         <div className="p-4 rounded-lg bg-[#111215] border border-[#22232A] space-y-3">
           <div className="text-[10px] font-semibold text-slate-500 uppercase">Target Model Selected</div>
@@ -316,7 +316,7 @@ export const SimulatorPage: React.FC = () => {
         </div>
 
         {/* Net Delta / Savings Banner */}
-        <div className={`p-4 rounded-lg border flex flex-col justify-between space-y-3 ${
+        <div className={`p-4 rounded-lg border flex flex-col justify-between space-y-3 sm:col-span-2 lg:col-span-1 ${
           isSavings ? 'bg-[#26B574]/10 border-[#26B574]/30 text-[#26B574]' : 'bg-[#E5484D]/10 border-[#E5484D]/30 text-[#E5484D]'
         }`}>
           <div className="flex items-center gap-2 font-sans font-bold text-sm">
@@ -349,7 +349,7 @@ export const SimulatorPage: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse font-mono text-xs">
+          <table className="w-full text-left border-collapse font-mono text-xs min-w-[600px]">
             <thead>
               <tr className="border-b border-[#1C1D22] text-[10px] text-slate-500 uppercase">
                 <th className="py-2.5 px-3">Session ID</th>
@@ -371,7 +371,7 @@ export const SimulatorPage: React.FC = () => {
                 return (
                   <tr key={s.sessionId} className="hover:bg-[#16171B] transition-colors">
                     <td className="py-2 px-3 text-slate-300 font-bold">
-                      {s.sessionId.slice(0, 24)}…
+                      {s.sessionId.slice(0, 20)}…
                     </td>
                     <td className="py-2 px-3 text-right text-slate-400">{s.turnCount}</td>
                     <td className="py-2 px-3 text-right text-slate-200">${s.totalCost.toFixed(2)}</td>

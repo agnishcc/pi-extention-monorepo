@@ -83,40 +83,40 @@ export const UsagePage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Top Header & Single Global Interval Picker */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1C1D22] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1C1D22] pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-white tracking-tight">
+            <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
               Usage & Analytics Overview
             </h2>
             <span className="text-[10px] font-mono font-medium text-[#5E6AD2] bg-[#5E6AD2]/10 px-2 py-0.5 rounded border border-[#5E6AD2]/20">
               {timeframeLabels[timeframe]}
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-mono mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
             Pi Agent execution logs, token distribution, & model cost breakdown
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Export Modal Trigger */}
           <button
             onClick={() => setIsExportOpen(true)}
-            className="px-3 py-1.5 rounded-md bg-[#111215] border border-[#22232A] hover:border-[#2E2F38] text-slate-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all"
+            className="px-2.5 py-1.5 rounded-md bg-[#111215] border border-[#22232A] hover:border-[#2E2F38] text-slate-300 hover:text-white text-xs font-mono flex items-center gap-1.5 transition-all"
           >
             <Download className="w-3.5 h-3.5 text-[#5E6AD2]" /> Export
           </button>
 
           {/* SINGLE Global Page Timeframe Selector */}
-          <div className="bg-[#111215] p-0.5 rounded-md border border-[#22232A] flex items-center gap-1 text-[11px] font-mono">
-            <div className="px-2 py-1 text-slate-500 text-[10px] flex items-center gap-1 border-r border-[#1C1D22]">
+          <div className="bg-[#111215] p-0.5 rounded-md border border-[#22232A] flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-[11px] font-mono overflow-x-auto">
+            <div className="px-1.5 sm:px-2 py-1 text-slate-500 text-[10px] flex items-center gap-1 border-r border-[#1C1D22] shrink-0">
               <Clock className="w-3 h-3 text-[#5E6AD2]" /> Period:
             </div>
             {(['all', 'monthly', 'weekly', 'daily'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTimeframe(t)}
-                className={`px-3 py-1 rounded font-medium transition-all ${
+                className={`px-2 sm:px-3 py-1 rounded font-medium transition-all shrink-0 ${
                   timeframe === t
                     ? 'bg-[#1C1D22] text-white border border-[#2E2F38] shadow-sm'
                     : 'text-slate-500 hover:text-slate-300'
@@ -130,7 +130,7 @@ export const UsagePage: React.FC = () => {
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard
           label={`Total Spend (${timeframeLabels[timeframe]})`}
           value={`$${summary?.totalCost.toFixed(2) || '0.00'}`}
@@ -179,7 +179,7 @@ export const UsagePage: React.FC = () => {
             <span className="text-[10px] font-mono text-slate-500 uppercase">{timeframe}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div className="p-3 rounded-md bg-[#0B0C0E] border border-[#1C1D22] space-y-1">
               <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                 <User className="w-3.5 h-3.5 text-slate-500" /> Main Agent

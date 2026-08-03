@@ -59,7 +59,7 @@ export const UsageCharts: React.FC<UsageChartsProps> = ({ timeline, unit, setUni
   return (
     <div className="p-4 rounded-lg bg-[#111215] border border-[#22232A] space-y-4">
       {/* Header controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-[#5E6AD2]" />
           <h3 className="font-semibold text-xs text-white">Usage & Financial Activity</h3>
@@ -67,7 +67,7 @@ export const UsageCharts: React.FC<UsageChartsProps> = ({ timeline, unit, setUni
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Metric Selector */}
-          <div className="bg-[#0B0C0E] p-0.5 rounded-md border border-[#22232A] flex items-center gap-1 text-[11px]">
+          <div className="bg-[#0B0C0E] p-0.5 rounded-md border border-[#22232A] flex items-center gap-1 text-[10px] sm:text-[11px]">
             <button
               onClick={() => setMetric('cost')}
               className={`px-2.5 py-1 rounded font-medium transition-all ${
@@ -87,7 +87,7 @@ export const UsageCharts: React.FC<UsageChartsProps> = ({ timeline, unit, setUni
           </div>
 
           {/* Granularity Selector */}
-          <div className="bg-[#0B0C0E] p-0.5 rounded-md border border-[#22232A] flex items-center gap-1 text-[11px]">
+          <div className="bg-[#0B0C0E] p-0.5 rounded-md border border-[#22232A] flex items-center gap-0.5 text-[10px] sm:text-[11px]">
             {(['daily', 'weekly', 'monthly'] as const).map((u) => (
               <button
                 key={u}
@@ -124,10 +124,10 @@ export const UsageCharts: React.FC<UsageChartsProps> = ({ timeline, unit, setUni
       </div>
 
       {/* Chart Canvas */}
-      <div className="h-64 w-full pt-2">
+      <div className="h-56 sm:h-64 w-full pt-2">
         <ResponsiveContainer width="100%" height="100%">
           {chartType === 'area' ? (
-            <AreaChart data={timeline} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+            <AreaChart data={timeline} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#26B574" stopOpacity={0.25} />

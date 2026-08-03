@@ -194,13 +194,13 @@ export const SubscriptionAdvisorPage: React.FC = () => {
   return (
     <div className="space-y-6 font-sans">
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1C1D22] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1C1D22] pb-4">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-[#5E6AD2]" />
             Subscription vs Pay-Per-Token Advisor
           </h2>
-          <p className="text-xs text-slate-500 font-mono mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
             Persisted in SQLite database (~/.pi/token-usage.db) • Flat subscriptions vs API pricing
           </p>
         </div>
@@ -208,14 +208,14 @@ export const SubscriptionAdvisorPage: React.FC = () => {
         {/* Add Subscription Button */}
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="px-4 py-2 rounded-md bg-[#5E6AD2] hover:bg-[#4F5BBF] text-white text-xs font-bold font-mono flex items-center gap-2 shadow-sm transition-all"
+          className="px-3.5 py-2 rounded-md bg-[#5E6AD2] hover:bg-[#4F5BBF] text-white text-xs font-bold font-mono flex items-center gap-2 shadow-sm transition-all self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" /> Add Subscription
         </button>
       </div>
 
       {/* Portfolio Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono">
         <div className="p-4 rounded-lg bg-[#111215] border border-[#22232A] space-y-1">
           <div className="text-[10px] uppercase text-slate-500 font-semibold">Configured Monthly Subscriptions</div>
           <div className="text-2xl font-bold text-white">${totalSubMonthly.toFixed(2)} <span className="text-xs font-normal text-slate-500">/mo</span></div>
@@ -241,13 +241,13 @@ export const SubscriptionAdvisorPage: React.FC = () => {
           <div className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400">
             Active Subscriptions ({subscriptionDetails.length})
           </div>
-          <span className="text-[10px] text-slate-500">Stored in SQLite token-usage.db</span>
+          <span className="text-[10px] text-slate-500 hidden sm:inline">Stored in SQLite token-usage.db</span>
         </div>
 
         {loading ? (
           <div className="py-12 text-center text-slate-600 text-xs font-mono">Loading saved subscriptions…</div>
         ) : subscriptionDetails.length === 0 ? (
-          <div className="p-12 rounded-lg bg-[#111215] border border-[#22232A] text-center space-y-3 font-sans">
+          <div className="p-8 sm:p-12 rounded-lg bg-[#111215] border border-[#22232A] text-center space-y-3 font-sans">
             <CreditCard className="w-8 h-8 text-slate-600 mx-auto" />
             <div className="text-sm font-semibold text-white">No subscriptions added yet</div>
             <p className="text-xs text-slate-500 max-w-sm mx-auto font-mono">
@@ -283,9 +283,9 @@ export const SubscriptionAdvisorPage: React.FC = () => {
               const isSubAdvantage = advantage === 'subscription';
 
               return (
-                <div key={sub.providerId} className="p-5 rounded-lg bg-[#111215] border border-[#22232A] space-y-4">
+                <div key={sub.providerId} className="p-4 sm:p-5 rounded-lg bg-[#111215] border border-[#22232A] space-y-4">
                   {/* Top Bar: Provider logo/name + Price + Remove button */}
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1C1D22] pb-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1C1D22] pb-4">
                     <div className="flex items-center gap-3">
                       <ProviderLogo logo={logo} name={providerName} size="lg" />
                       <div>
@@ -302,7 +302,7 @@ export const SubscriptionAdvisorPage: React.FC = () => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
                       <button
                         onClick={() => handleRemoveSubscription(sub.providerId)}
                         title="Remove subscription from database"
@@ -314,7 +314,7 @@ export const SubscriptionAdvisorPage: React.FC = () => {
                   </div>
 
                   {/* Recommendation Metric Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="p-3 rounded bg-[#0B0C0E] border border-[#1C1D22] space-y-1">
                       <div className="text-[10px] text-slate-500">Monthly Pay-Per-Token API</div>
                       <div className="text-base font-bold text-white">${monthlyApiCost.toFixed(2)} <span className="text-[10px] font-normal text-slate-500">/mo</span></div>

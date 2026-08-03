@@ -19,8 +19,10 @@ async function startServer() {
   await dbManager.ready();
   console.log('  Connected to Postgres token usage database');
 
-  // Auto ingest historic sessions
-  await dbManager.autoIngestHistoricSessions();
+  // Auto ingest historic sessions (deferred to avoid startup CPU spike)
+  setTimeout(() => {
+    dbManager.autoIngestHistoricSessions().catch(err => console.warn('Historic ingest error:', err));
+  }, 10_000);
 
   const server = Bun.serve({
     port: PORT,
@@ -233,6 +235,8 @@ async function startServer() {
 
       // Serve Static SPA (dist)
       let filePath = join(DIST_DIR, path === '/' ? 'index.html' : path);
+      const isAsset = path.startsWith('/assets/');
+
       if (!existsSync(filePath) || (existsSync(filePath) && Bun.file(filePath).size === 0)) {
         filePath = join(DIST_DIR, 'index.html');
       }
@@ -241,7 +245,7 @@ async function startServer() {
         const file = Bun.file(filePath);
         return new Response(file, {
           headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Cache-Control': isAsset ? 'public, max-age=31536000, immutable' : 'no-cache',
             ...corsHeaders,
           },
         });

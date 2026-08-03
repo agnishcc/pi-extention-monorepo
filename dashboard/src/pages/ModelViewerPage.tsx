@@ -82,23 +82,23 @@ export const ModelViewerPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header & Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#1C1D22] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1C1D22] pb-4">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <Cpu className="w-5 h-5 text-[#5E6AD2]" />
             Model Viewer & Cross-Provider Rates
           </h2>
-          <p className="text-xs text-slate-500 font-mono mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 font-mono mt-0.5">
             Inspect individual models and compare pricing & spend across all providers
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
           {/* View Mode Toggle */}
-          <div className="bg-[#111215] p-0.5 rounded-md border border-[#22232A] flex items-center gap-1 text-[11px] font-mono">
+          <div className="bg-[#111215] p-0.5 rounded-md border border-[#22232A] flex items-center gap-1 text-[11px] font-mono justify-center">
             <button
               onClick={() => setViewMode('cross')}
-              className={`px-3 py-1 rounded font-medium transition-all ${
+              className={`px-3 py-1 rounded font-medium transition-all flex-1 sm:flex-none text-center ${
                 viewMode === 'cross' ? 'bg-[#1C1D22] text-[#5E6AD2] border border-[#2E2F38]' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
@@ -106,7 +106,7 @@ export const ModelViewerPage: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('provider')}
-              className={`px-3 py-1 rounded font-medium transition-all ${
+              className={`px-3 py-1 rounded font-medium transition-all flex-1 sm:flex-none text-center ${
                 viewMode === 'provider' ? 'bg-[#1C1D22] text-white border border-[#2E2F38]' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
@@ -180,9 +180,9 @@ export const ModelViewerPage: React.FC = () => {
                 onClick={() => setSelectedBaseModel(cm)}
                 className="p-4 rounded-lg bg-[#111215] border border-[#22232A] hover:border-[#2E2F38] transition-all cursor-pointer space-y-3 group"
               >
-                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold text-sm text-white group-hover:text-[#5E6AD2] transition-colors">
                         {cm.displayName}
                       </h3>
@@ -198,8 +198,8 @@ export const ModelViewerPage: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="text-right font-mono">
+                  <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#1C1D22]">
+                    <div className="text-left sm:text-right font-mono">
                       <div className="text-sm font-bold text-[#26B574]">
                         ${cm.totalCost.toFixed(2)}
                       </div>
@@ -227,7 +227,7 @@ export const ModelViewerPage: React.FC = () => {
         /* By Provider Table View */
         <div className="rounded-lg bg-[#111215] border border-[#22232A] overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[750px]">
               <thead>
                 <tr className="border-b border-[#1C1D22] text-[10px] font-mono font-semibold text-slate-500 uppercase tracking-wider">
                   <th className="py-2.5 px-3">Model</th>
@@ -284,7 +284,7 @@ export const ModelViewerPage: React.FC = () => {
       {/* Cross-Provider Model Breakdown Drawer Modal */}
       {selectedBaseModel && (
         <div className="fixed inset-0 bg-black/80 z-50 flex justify-end animate-fadeIn">
-          <div className="w-full max-w-xl bg-[#0B0C0E] border-l border-[#1C1D22] h-full flex flex-col">
+          <div className="w-full sm:max-w-xl bg-[#0B0C0E] border-l border-[#1C1D22] h-full flex flex-col">
             {/* Header */}
             <div className="p-4 border-b border-[#1C1D22] flex items-center justify-between bg-[#111215]">
               <div>

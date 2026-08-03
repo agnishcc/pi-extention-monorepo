@@ -1,9 +1,8 @@
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export interface Snippet {
-	id: string;
+export interface PromptState {
 	text: string;
-	createdAt: number;
+	enabled: boolean;
 }
 
-export type OverlayAction = { type: "add"; text: string } | { type: "delete"; id: string; text: string };
+export type OverlayResult = PromptState | undefined;
