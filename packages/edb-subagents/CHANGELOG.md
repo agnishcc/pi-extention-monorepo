@@ -2,6 +2,9 @@
 
 ## [0.20.0] - 2026-08-03
 
+
+## [Unreleased]
+
 ### Added
 - **Live agent widget steps** — the V2 widget now shows what each running agent is doing (active tool, latest response text, thinking) plus turns, tool-use count and a live token total.
 - **Interactive `/agents` menu** — status-grouped agent list (running / waiting / done / idle / error / retired) with per-agent actions: open the agent session in a new tmux window (`pi --session`), live-tail a running agent, stop, dispose, show record. New subcommands: `/agents list`, `/agents open <id>`, `/agents tail <id>`.
