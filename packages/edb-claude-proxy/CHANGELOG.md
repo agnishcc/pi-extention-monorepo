@@ -3,7 +3,7 @@
 ## [0.20.0] - 2026-08-03
 
 
-## [Unreleased]
+## [0.20.1] - 2026-08-03
 
 ### Deprecated
 - Extension is no longer maintained. Do not install for new setups; remove if already installed.

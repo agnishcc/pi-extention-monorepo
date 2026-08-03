@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-agent-mode",
-	"version": "0.20.0",
+	"version": "0.20.1",
 	"description": "Pi extension: switch the main agent's personality/mode via /mode command",
 	"keywords": [
 		"pi-package",

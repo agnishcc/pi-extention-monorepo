@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-protocol",
-	"version": "0.20.0",
+	"version": "0.20.1",
 	"description": "Shared versioned protocols for EDB Pi extensions",
 	"type": "module",
 	"license": "MIT",

@@ -3,7 +3,7 @@
 ## [0.20.0] - 2026-08-03
 
 
-## [Unreleased]
+## [0.20.1] - 2026-08-03
 
 ### Removed
 - **v1 sub-agent engine removed** — the external broker-session architecture and its `edb-bridge` dependency are gone. Sub-agents now always run under the in-process V2 coordinator (no engine setting, no socket broker).

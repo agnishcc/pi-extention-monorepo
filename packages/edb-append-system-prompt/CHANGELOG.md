@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.20.1] - 2026-08-03
 
 ### Changed
 - Reworked to a single system-prompt injection with an enable/disable toggle
