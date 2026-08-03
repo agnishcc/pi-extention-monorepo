@@ -1,5 +1,10 @@
 # @agnishc/edb-gemini-proxy
 
+> ## ⚠️ DEPRECATED — 2026-08-03
+>
+> This extension is no longer maintained. Do not install it for new setups, and remove it if already installed (`pi uninstall @agnishc/edb-gemini-proxy`).
+> The code remains in the repo for reference only.
+
 A Pi CLI extension that registers a `gemini_proxy` tool — lets the pi agent delegate tasks to **Google's Gemini CLI** running in headless mode.
 
 ## Use cases

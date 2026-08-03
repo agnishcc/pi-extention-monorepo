@@ -46,9 +46,7 @@
 		"typebox": "*"
 	},
 	"dependencies": {
-		"@agnishc/edb-protocol": "^0.20.0",
-		"croner": "^10.0.1",
-		"nanoid": "^5.0.0"
+		"@agnishc/edb-protocol": "^0.20.0"
 	},
 	"engines": {
 		"node": ">=22.19.0"

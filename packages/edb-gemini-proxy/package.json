@@ -1,7 +1,8 @@
 {
 	"name": "@agnishc/edb-gemini-proxy",
 	"version": "0.20.0",
-	"description": "Pi extension: gemini_proxy tool \u2014 delegate tasks to Google Gemini CLI from within pi",
+	"deprecated": "Deprecated as of 2026-08-03 — no longer maintained. Do not install for new setups; remove the extension if installed. The gemini_proxy tool is superseded by pi's built-in agent delegation.",
+	"description": "[DEPRECATED] Pi extension: gemini_proxy tool \u2014 delegate tasks to Google Gemini CLI from within pi",
 	"keywords": [
 		"pi-package",
 		"pi-extension",

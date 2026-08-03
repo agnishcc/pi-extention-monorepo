@@ -39,8 +39,6 @@ const SYSTEM_REMINDER = `<system-reminder>
 The task tools haven't been used recently. If you're working on tasks that would benefit from tracking progress, consider using TaskCreate to add new tasks and TaskUpdate to update task status (set to in_progress when starting, completed when done). Also consider cleaning up the task list if it has become stale. Only use these if relevant to the current work. This is just a gentle reminder - ignore if not applicable. Make sure that you NEVER mention this reminder to the user
 </system-reminder>`;
 
-// Internal pi.events: edb-bridge emits this when a task_updated message arrives (from sub-agent)
-const EV_BRIDGE_TASK_UPDATED = "bridge:task_updated";
 // We emit this so edb-subagents can read the store path
 const EV_TODO_STORE_PATH = "todo:store_path";
 
@@ -84,73 +82,12 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		AUTO_CLEAR_DELAY,
 	);
 	/** The pi session ID of the current (or most recently started) session. */
-	let currentSessionId: string | null = null;
 
 	// Expose store path to other extensions (edb-subagents reads this to inject PI_TODO into sub-agents)
 	function emitStorePath() {
 		const p = store.path;
 		if (p) pi.events.emit(EV_TODO_STORE_PATH, { path: p });
 	}
-
-	// Listen for bridge:task_updated (emitted by edb-bridge when a sub-agent updates a task)
-	// Re-reads the store and refreshes the widget
-	pi.events.on(EV_BRIDGE_TASK_UPDATED, () => {
-		// Force a re-read from disk (sub-agent may have written to the shared file)
-		if (store.path) {
-			try {
-				store.reload();
-			} catch {
-				/* ignore */
-			}
-		}
-		widget.update();
-	});
-
-	// Listen for bridge:notify_parent — sub-agent progress update with optional task_id
-	// When task_id is provided, update the task's activeForm so it shows in the spinner
-	pi.events.on("bridge:notify_parent", (payload: unknown) => {
-		const p = payload as { taskId?: string; message?: string; agentId?: string } | undefined;
-		if (!p?.taskId || !p.message) return;
-		void (async () => {
-			// Update activeForm on the task so the widget spinner shows the progress message
-			await taskService.applyUpdate(p.taskId!, { activeForm: p.message!.slice(0, 80) }, rootActor);
-			widget.update();
-		})().catch(() => {
-			/* ignore */
-		});
-	});
-
-	// Listen for bridge:ask_supervisor — sub-agent called ask_supervisor with a task_id
-	// Auto-block the linked task so the widget shows ⏸ with the question text
-	pi.events.on("bridge:ask_supervisor", (payload: unknown) => {
-		const p = payload as { taskId?: string; question?: string; messageId?: string } | undefined;
-		if (!p?.taskId || !p.question) return;
-		void taskService
-			.applyUpdate(
-				p.taskId,
-				{
-					status: "blocked",
-					blockQuestion: p.question,
-					blockMessageId: p.messageId,
-				},
-				rootActor,
-			)
-			.then(() => widget.update())
-			.catch(() => {});
-	});
-
-	// Listen for bridge:supervisor_answered — orchestrator answered, unblock the task
-	pi.events.on("bridge:supervisor_answered", (payload: unknown) => {
-		const p = payload as { taskId?: string } | undefined;
-		if (!p?.taskId) return;
-		void (async () => {
-			// Transition back to in_progress and clear block metadata
-			await taskService.applyUpdate(p.taskId!, { status: "in_progress" }, rootActor);
-			widget.update();
-		})().catch(() => {
-			/* ignore */
-		});
-	});
 
 	// Listen for todo:update_task — edb-subagents requests a task status update
 	// This avoids edb-subagents duplicating FileTaskStore write logic
@@ -160,8 +97,6 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		void (async () => {
 			await taskService.applyUpdate(p.taskId!, p.fields as any, rootActor);
 			widget.update();
-			// Notify bridge to propagate refresh to parent if we're in a sub-agent store
-			notifyBridgeOnChange();
 		})().catch(() => {
 			/* ignore */
 		});
@@ -181,13 +116,6 @@ export default function todoExtension(pi: ExtensionAPI): void {
 			storeUpgraded = true; // prevent upgradeStoreIfNeeded from overriding
 			emitStorePath();
 		}
-	}
-
-	// Helper to emit task_updated through bridge (so parent session widget refreshes)
-	function notifyBridgeOnChange() {
-		// Only route to parent when this is a sub-agent session (store was overridden from system prompt)
-		if (!storeUpgraded) return;
-		pi.events.emit(EV_BRIDGE_TASK_UPDATED, { storePath: store.path, sessionId: currentSessionId });
 	}
 
 	let storeUpgraded = false;
@@ -254,7 +182,7 @@ export default function todoExtension(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async (event, ctx) => {
 		cwd = ctx.cwd;
 		cfg = loadTodoConfig(cwd);
-		currentSessionId = ctx.sessionManager.getSessionId();
+
 		widget.setUICtx(ctx.ui);
 		// For sub-agent sessions: read store path from system prompt (injected by edb-subagents)
 		maybeOverrideStoreFromPrompt(event.systemPrompt, ctx.sessionManager.getSessionId());
@@ -275,7 +203,7 @@ export default function todoExtension(pi: ExtensionAPI): void {
 		const isResume = event.reason === "resume";
 		cwd = ctx.cwd;
 		cfg = loadTodoConfig(cwd);
-		currentSessionId = ctx.sessionManager.getSessionId();
+
 		storeUpgraded = false;
 		persistedTasksShown = false;
 		storePathFromPromptParsed = false;
@@ -310,60 +238,21 @@ export default function todoExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "TaskCreate",
 		label: "TaskCreate",
-		description: `Use this tool to create a structured task list for your current coding session. This helps you track progress, organize complex tasks, and demonstrate thoroughness to the user.
-It also helps the user understand the progress of the task and overall progress of their requests.
+		description: `Create tasks to track progress on complex, multi-step work. Use proactively when: 3+ distinct steps, the user explicitly asks for a todo list, multiple tasks are given, or new instructions arrive. Skip for trivial or conversational work — one-off tasks don't need tracking.
 
-## When to Use This Tool
-
-Use this tool proactively in these scenarios:
-
-- Complex multi-step tasks - When a task requires 3 or more distinct steps or actions
-- Non-trivial and complex tasks - Tasks that require careful planning or multiple operations
-- User explicitly requests todo list - When the user directly asks you to use the todo list
-- User provides multiple tasks - When users provide a list of things to be done (numbered or comma-separated)
-- After receiving new instructions - Immediately capture user requirements as tasks
-- When you start working on a task - Mark it as in_progress BEFORE beginning work
-- After completing a task - Mark it as completed and add any new follow-up tasks discovered during implementation
-
-## When NOT to Use This Tool
-
-Skip using this tool when:
-- There is only a single, straightforward task
-- The task is trivial and tracking it provides no organizational benefit
-- The task can be completed in less than 3 trivial steps
-- The task is purely conversational or informational
-
-NOTE that you should not use this tool if there is only one trivial task to do. In this case you are better off just doing the task directly.
-
-## Batch vs single
-
-Use the \`tasks\` array to create multiple tasks in a single call — **always prefer this over calling TaskCreate multiple times**:
+Prefer the \`tasks\` array to create several at once — one call instead of many:
 \`\`\`json
 { "tasks": [ { "content": "Task A" }, { "content": "Task B", "description": "..." } ] }
 \`\`\`
-For a single task, pass the fields at the top level (\`content\`, \`description\`, etc.).
+For a single task, pass the fields at the top level.
 
-## Task Fields
+Fields: content (imperative title), description (context / acceptance criteria), priority (high/medium/low), activeForm (spinner text while in_progress). Tasks start as pending.
 
-- **content**: A brief, actionable title in imperative form (e.g., "Fix authentication bug in login flow")
-- **description**: Detailed description of what needs to be done, including context and acceptance criteria
-- **activeForm** (optional): Present continuous form shown in the spinner when in_progress (e.g., "Fixing authentication bug"). If omitted, the spinner shows the content instead.
-- **priority**: high / medium / low
-
-All tasks are created with status \`pending\`.
-
-## Tips
-
-- Create tasks with clear, specific content that describes the outcome
-- Include enough detail in the description for another agent to understand and complete the task
-- After creating tasks, use TaskUpdate to set up dependencies (blocks/blockedBy) if needed
-- Check TaskList first to avoid creating duplicate tasks
-- **Always use tasks[] for multiple tasks** — one call instead of many`,
+Check TaskList first to avoid duplicates; wire dependencies later with TaskUpdate (blocks / blockedBy).`,
 		promptGuidelines: [
-			"When working on complex multi-step tasks, use TaskCreate to track progress and TaskUpdate to update status.",
-			"To create multiple tasks, pass them all in a single call using the tasks[] array — never call TaskCreate multiple times.",
-			"Mark tasks as in_progress before starting work and completed when done.",
-			"Use TaskList to check for available work after completing a task.",
+			"Use TaskCreate to track complex multi-step work — mark in_progress before starting and completed when done.",
+			"Create multiple tasks in one call via the tasks[] array — never call TaskCreate repeatedly.",
+			"Check TaskList after completing a task for newly unblocked work.",
 		],
 		parameters: TodoCreateParams,
 
@@ -397,7 +286,6 @@ All tasks are created with status \`pending\`.
 					})),
 					rootActor,
 				);
-				notifyBridgeOnChange();
 				widget.update();
 				const summary = created.map((t) => `#${t.id}: ${t.content}`).join(", ");
 				return {
@@ -435,7 +323,6 @@ All tasks are created with status \`pending\`.
 				},
 				rootActor,
 			);
-			notifyBridgeOnChange();
 			widget.update();
 			return {
 				content: [{ type: "text", text: `Task #${task.id} created successfully: ${task.content}` }],
@@ -478,26 +365,11 @@ All tasks are created with status \`pending\`.
 	pi.registerTool({
 		name: "TaskList",
 		label: "TaskList",
-		description: `Use this tool to list all tasks in the task list.
+		description: `List all tasks with status, priority, and dependency info.
 
-## When to Use This Tool
+Use to: see available (pending, unblocked) work, check overall progress, find blocked tasks needing resolution, and check for newly unblocked work after completing a task. Prefer working on tasks in ID order (lowest first).
 
-- To see what tasks are available to work on (status: pending, not blocked)
-- To check overall progress on the project
-- To find tasks that are blocked and need dependencies resolved
-- After completing a task, to check for newly unblocked work
-- **Prefer working on tasks in ID order** (lowest ID first) when multiple tasks are available
-
-## Output
-
-Returns a summary of each task:
-- **id**: Task identifier (use with TaskGet, TaskUpdate)
-- **content**: Brief description of the task
-- **status**: pending, in_progress, blocked, failed, cancelled, or completed
-- **priority**: high, medium, or low
-- **blockedBy**: Open task IDs that must be resolved first
-
-Use TaskGet with a specific task ID to view full details including description.`,
+Output fields per task: id, content, status (pending/in_progress/blocked/failed/cancelled/completed), priority (high/medium/low), blockedBy (open IDs that must resolve first). Use TaskGet with a task ID for full details.`,
 		promptSnippet: "List all tasks in the task list with status, priority, and dependency info",
 		parameters: Type.Object({}),
 
@@ -560,28 +432,11 @@ Use TaskGet with a specific task ID to view full details including description.`
 	pi.registerTool({
 		name: "TaskGet",
 		label: "TaskGet",
-		description: `Use this tool to retrieve a task by its ID from the task list.
+		description: `Retrieve a task by ID with full details.
 
-## When to Use This Tool
+Use when: you need full description/context before starting work, to understand dependencies (what it blocks / what blocks it), or after being assigned a task.
 
-- When you need the full description and context before starting work on a task
-- To understand task dependencies (what it blocks, what blocks it)
-- After being assigned a task, to get complete requirements
-
-## Output
-
-Returns full task details:
-- **content**: Task title
-- **description**: Detailed requirements and context
-- **status**: pending, in_progress, blocked, failed, cancelled, or completed
-- **priority**: high, medium, or low
-- **blocks**: Tasks waiting on this one to complete
-- **blockedBy**: Tasks that must complete before this one can start
-
-## Tips
-
-- After fetching a task, verify its blockedBy list is empty before beginning work.
-- Use TaskList to see all tasks in summary form.`,
+Returns: content, description, status (pending/in_progress/blocked/failed/cancelled/completed), priority (high/medium/low), blocks (tasks waiting on it), blockedBy (tasks that must finish first). After fetching, verify blockedBy is empty before starting. Use TaskList for summaries.`,
 		promptSnippet: "Retrieve full details of a task by ID, including description and dependencies",
 		parameters: TodoGetParams,
 
@@ -640,66 +495,13 @@ Returns full task details:
 	pi.registerTool({
 		name: "TaskUpdate",
 		label: "TaskUpdate",
-		description: `Use this tool to update a task in the task list.
+		description: `Update a task in the task list.
 
-## When to Use This Tool
+Mark in_progress BEFORE starting work; mark completed ONLY when fully done (not when tests are failing, implementation is partial, or errors are unresolved). When blocked, keep in_progress and create a task describing what needs resolving. After completing, call TaskList for the next task.
 
-**Before starting work on a task:**
-- Mark it in_progress BEFORE beginning — do not start work without updating status first
+Fields: status (pending → in_progress → completed; or blocked/failed/cancelled; deleted removes), content, description, activeForm (spinner text), priority, owner, metadata (merge; null deletes a key), addBlocks (IDs that can't start until this completes), addBlockedBy (IDs that must complete first).
 
-**Mark tasks as completed:**
-- When you have completed the work described in a task
-- IMPORTANT: Always mark your tasks as completed when you finish them
-- After completing, call TaskList to find your next task
-
-- ONLY mark a task as completed when you have FULLY accomplished it
-- If you encounter errors, blockers, or cannot finish, keep the task as in_progress
-- When blocked, create a new task describing what needs to be resolved
-- Never mark a task as completed if:
-  - Tests are failing
-  - Implementation is partial
-  - You encountered unresolved errors
-  - You couldn't find necessary files or dependencies
-
-**Delete tasks:**
-- When a task is no longer relevant or was created in error
-- Setting status to \`deleted\` permanently removes the task
-
-**Update task details:**
-- When requirements change or become clearer
-- When establishing dependencies between tasks
-
-## Fields You Can Update
-
-- **status**: pending → in_progress → completed, or blocked / failed / cancelled (deleted removes)
-- **content**: Change the task title
-- **description**: Change the task description
-- **activeForm**: Spinner text when in_progress (e.g., "Running tests")
-- **priority**: high, medium, or low
-- **owner**: Agent name or owner
-- **metadata**: Merge metadata keys (set a key to null to delete it)
-- **addBlocks**: Task IDs that cannot start until this one completes
-- **addBlockedBy**: Task IDs that must complete before this one can start
-
-## Status Workflow
-
-\`pending\` → \`in_progress\` → \`completed\`; use \`blocked\`, \`failed\`, or \`cancelled\` when work does not complete normally.
-
-Use \`deleted\` to permanently remove a task.
-
-## Examples
-
-Mark as in progress:
-\`{ "id": "t1", "status": "in_progress" }\`
-
-Mark as completed:
-\`{ "id": "t1", "status": "completed" }\`
-
-Delete a task:
-\`{ "id": "t1", "status": "deleted" }\`
-
-Set dependencies:
-\`{ "id": "t2", "addBlockedBy": ["t1"] }\``,
+Examples: { "id": "t1", "status": "in_progress" } · { "id": "t1", "status": "completed" } · { "id": "t1", "status": "deleted" } · { "id": "t2", "addBlockedBy": ["t1"] }`,
 		promptSnippet: "Update a task's status, content, priority, or dependency links",
 		promptGuidelines: [
 			"Mark tasks in_progress BEFORE starting work, completed immediately after finishing. Never batch completions.",
@@ -740,7 +542,6 @@ Set dependencies:
 				widget.setActiveTask(id, false); // stop spinner while blocked
 			}
 
-			notifyBridgeOnChange();
 			widget.setUICtx(ctx.ui);
 			widget.update();
 
@@ -777,10 +578,8 @@ Set dependencies:
 		label: "TaskOutput",
 		description:
 			"Retrieves output from a running or completed background task process.\n" +
-			"- Takes a task_id parameter identifying the task\n" +
-			"- Returns the task output along with status information\n" +
-			"- Use block=true (default) to wait for task completion\n" +
-			"- Use block=false for a non-blocking check of current status\n" +
+			"- task_id: the task to inspect\n" +
+			"- block=true (default) waits for completion; block=false returns current status immediately\n" +
 			"- Task IDs can be found using TaskList",
 		promptSnippet: "Retrieve output from a running or completed background task process",
 		parameters: Type.Object({
@@ -853,10 +652,7 @@ Set dependencies:
 		name: "TaskStop",
 		label: "TaskStop",
 		description:
-			"Stops a running background task process.\n" +
-			"- Sends SIGTERM, waits 5 seconds, then SIGKILL if still running\n" +
-			"- Marks the task as cancelled after stopping\n" +
-			"- Use this tool when you need to terminate a long-running task",
+			"Stops a running background task process (SIGTERM, then SIGKILL after 5s; marks the task cancelled).",
 		promptSnippet: "Stop a running background task process",
 		parameters: Type.Object({
 			task_id: Type.String({ description: "The task ID of the background process to stop" }),

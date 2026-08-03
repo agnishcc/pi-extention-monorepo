@@ -5,7 +5,8 @@
 
 ## [Unreleased]
 
-0.19.0] - 2026-08-03
+### Removed
+- `edb-bridge` event listeners removed (`bridge:task_updated`, `bridge:notify_parent`, `bridge:ask_supervisor`, `bridge:supervisor_answered`) — the bridge package is dropped; sub-agent task sync now flows through the versioned todo RPC (`edb:todo:v1:*`).
 
 ### Added
 - `TaskService` application layer shared by the existing tools and the new versioned RPC server (`edb:todo:v1:*` events).

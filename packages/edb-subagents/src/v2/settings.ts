@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export interface SubagentsV2Settings {
-	engine: "v1" | "v2";
 	maxConcurrentPrompts: number;
 	maxChildrenPerParent: number;
 	maxDepth: number;
@@ -18,7 +17,6 @@ export interface SubagentsV2Settings {
 }
 
 export const DEFAULT_V2_SETTINGS: SubagentsV2Settings = {
-	engine: "v1",
 	maxConcurrentPrompts: 4,
 	maxChildrenPerParent: 2,
 	maxDepth: 4,
@@ -49,7 +47,6 @@ function read(path: string): Partial<SubagentsV2Settings> {
 	try {
 		const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 		const result: Partial<SubagentsV2Settings> = {};
-		if (raw.engine === "v1" || raw.engine === "v2") result.engine = raw.engine;
 		if (raw.projectAgents === "trusted" || raw.projectAgents === "disabled") result.projectAgents = raw.projectAgents;
 		if (typeof raw.autoCompleteLinkedTasks === "boolean")
 			result.autoCompleteLinkedTasks = raw.autoCompleteLinkedTasks;

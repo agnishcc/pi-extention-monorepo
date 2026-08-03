@@ -18,11 +18,8 @@ export const OptionSchema = Type.Object({
 	isOther: Type.Optional(
 		Type.Boolean({
 			description:
-				"Mark this option as a free-text option. When selected, opens an inline editor " +
-				"instead of returning the option value. Use this when you want to provide your own " +
-				"label for the free-text option (e.g. 'Other', 'Custom'). " +
-				"If no option is marked isOther, a default free-text option is auto-appended. " +
-				"Only one option should be marked isOther per question.",
+				"Mark this option as the free-text option — opens an inline editor instead of returning a value. " +
+				"Only one per question; if none, a default free-text option is auto-appended.",
 		}),
 	),
 });
@@ -40,9 +37,7 @@ export const QuestionSchema = Type.Object({
 	}),
 	label: Type.Optional(
 		Type.String({
-			description:
-				"Short label shown in the tab bar when multiple questions are asked " +
-				"(e.g. 'Scope', 'Priority'). Defaults to Q1, Q2, …",
+			description: "Short label in the tab bar for multi-question flows (e.g. 'Scope'). Defaults to Q1, Q2, …",
 		}),
 	),
 	options: Type.Optional(
@@ -52,27 +47,22 @@ export const QuestionSchema = Type.Object({
 	),
 	placeholder: Type.Optional(
 		Type.String({
-			description:
-				"Hint text shown inside the editor for text questions " +
-				"(e.g. 'Enter your API key…'). Purely informational.",
+			description: "Hint text inside the editor for text questions (e.g. 'Enter your API key…').",
 		}),
 	),
 	multiple: Type.Optional(
 		Type.Boolean({
-			description:
-				"Allow the user to select multiple options (checkbox style). " +
-				"Only applies to choice questions. Default: false.",
+			description: "Allow multi-select (checkbox style) on a choice question. Default: false.",
 		}),
 	),
 	customLabel: Type.Optional(
 		Type.String({
-			description:
-				"Label for the free-text option row when no option is marked isOther. " + "Defaults to 'Type something.'",
+			description: "Label for the auto-appended free-text option row. Defaults to 'Type something.'",
 		}),
 	),
 	customPlaceholder: Type.Optional(
 		Type.String({
-			description: "Placeholder shown inside the inline editor for the free-text option in choice questions.",
+			description: "Placeholder inside the free-text editor in choice questions.",
 		}),
 	),
 	maxVisibleOptions: Type.Optional(
@@ -85,22 +75,16 @@ export const QuestionSchema = Type.Object({
 export const AskUserParams = Type.Object({
 	header: Type.Optional(
 		Type.String({
-			description:
-				"Optional title shown at the top of the prompt (e.g. 'Deployment settings'). " +
-				"Summarises the overall interaction.",
+			description: "Optional prompt title (e.g. 'Deployment settings').",
 		}),
 	),
 	questions: Type.Array(QuestionSchema, {
-		description:
-			"One or more questions to ask the user. " +
-			"Single-item arrays show a focused UI. " +
-			"Multi-item arrays show a tabbed wizard with a Submit step.",
+		description: "Questions to ask. Single-item array = focused UI; multi-item = tabbed wizard with a Submit step.",
 	}),
 	overlay: Type.Optional(
 		Type.Boolean({
 			description:
-				"Render the prompt as a framed popup overlay centred in the terminal instead of inline. " +
-				"Use for prominent confirmations or when screen context should remain visible. Default: false.",
+				"Render as a framed popup overlay instead of inline — for prominent confirmations. Default: false.",
 		}),
 	),
 });

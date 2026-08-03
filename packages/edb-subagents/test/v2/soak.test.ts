@@ -82,7 +82,7 @@ describe("V2 soak scenarios", () => {
 		const coordinator = new Coordinator({
 			rootSessionId: "root_shutdown_soak",
 			cwd: directory,
-			settings: { ...DEFAULT_V2_SETTINGS, engine: "v2" },
+			settings: { ...DEFAULT_V2_SETTINGS },
 			store: new AtomicStore(directory, "root_shutdown_soak", directory),
 			runtimePool: new RuntimePool(() => runtime, 60_000),
 			rootAdapter: { deliver: () => {} } as any,
@@ -275,7 +275,7 @@ function createCoordinator(
 	return new Coordinator({
 		rootSessionId,
 		cwd: directory,
-		settings: { ...DEFAULT_V2_SETTINGS, ...overrides, engine: "v2" },
+		settings: { ...DEFAULT_V2_SETTINGS, ...overrides },
 		store: new AtomicStore(directory, rootSessionId, directory),
 		runtimePool,
 		rootAdapter: { deliver: rootDeliver } as any,

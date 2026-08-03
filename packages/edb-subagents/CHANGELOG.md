@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Removed
+- **v1 sub-agent engine removed** — the external broker-session architecture and its `edb-bridge` dependency are gone. Sub-agents now always run under the in-process V2 coordinator (no engine setting, no socket broker).
+- `croner` / `nanoid` dependencies removed (v1-only usage).
+
 ### Added
 - **Live agent widget steps** — the V2 widget now shows what each running agent is doing (active tool, latest response text, thinking) plus turns, tool-use count and a live token total.
 - **Interactive `/agents` menu** — status-grouped agent list (running / waiting / done / idle / error / retired) with per-agent actions: open the agent session in a new tmux window (`pi --session`), live-tail a running agent, stop, dispose, show record. New subcommands: `/agents list`, `/agents open <id>`, `/agents tail <id>`.

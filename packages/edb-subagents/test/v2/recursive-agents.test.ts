@@ -115,7 +115,7 @@ describe("recursive logical coordination", () => {
 		coordinator = new Coordinator({
 			rootSessionId: "root_recursive",
 			cwd: directory,
-			settings: { ...DEFAULT_V2_SETTINGS, engine: "v2", maxConcurrentPrompts: 1, maxChildrenPerParent: 2 },
+			settings: { ...DEFAULT_V2_SETTINGS, maxConcurrentPrompts: 1, maxChildrenPerParent: 2 },
 			store: new AtomicStore(directory, "root_recursive", directory),
 			runtimePool,
 			rootAdapter: {

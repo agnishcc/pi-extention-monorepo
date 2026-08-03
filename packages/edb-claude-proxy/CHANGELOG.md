@@ -5,6 +5,9 @@
 
 ## [Unreleased]
 
+### Deprecated
+- Extension is no longer maintained. Do not install for new setups; remove if already installed.
+
 0.19.0] - 2026-08-03
 
 ## [0.17.0] - 2026-07-27

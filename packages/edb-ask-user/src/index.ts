@@ -34,23 +34,14 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 		description:
 			"Ask the user one or more structured questions directly in the terminal UI. " +
 			"Supports free-text input, multiple-choice option lists (single or multi-select), " +
-			"and multi-step questionnaires. Use this instead of embedding questions in your " +
-			"response text to avoid an extra model round-trip and give the user a clear, " +
-			"interactive prompt.",
+			"and multi-step questionnaires.",
 		promptSnippet: "Ask the user a question or questionnaire and get structured answers",
 		promptGuidelines: [
-			"Use ask_user whenever you need information, a preference, or confirmation from the user before proceeding.",
-			"Prefer ask_user over posing questions in your response text — it collects answers immediately without an extra LLM call.",
-			"For a single free-form question set type to 'text'. " +
-				"For a multiple-choice question set type to 'choice' and provide options. " +
-				"Pass several questions together for a multi-step flow.",
-			"Set multiple: true on a choice question to allow the user to select several options at once (checkbox style).",
-			"A free-text option is always available for choice questions. " +
-				"By default, a 'Type something.' option is auto-appended. " +
-				"If you want to provide your own free-text option (e.g. 'Other', 'Custom'), " +
-				"mark it with isOther: true — this replaces the default and avoids redundancy. " +
-				"Use customLabel / customPlaceholder to rename or hint that auto-appended option.",
-			"Use the header field to give the overall prompt a title (e.g. 'Deployment settings').",
+			"Use ask_user whenever you need information, a preference, or confirmation — not questions in your response text (avoids an extra LLM round-trip).",
+			"Single free-form question → type: 'text'. Multiple-choice → type: 'choice' with options. Pass several questions together for a multi-step flow.",
+			"Set multiple: true on a choice question for checkbox-style multi-select.",
+			"Choice questions always include a free-text option: 'Type something.' by default; mark your own option isOther: true (e.g. 'Other'), and use customLabel/customPlaceholder to rename it.",
+			"Use the header field to title the prompt (e.g. 'Deployment settings').",
 			"Set overlay: true for prominent confirmations or when terminal context should stay visible.",
 		],
 		parameters: AskUserParams,

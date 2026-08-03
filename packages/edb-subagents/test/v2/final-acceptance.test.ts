@@ -177,7 +177,7 @@ describe("V2 final acceptance", () => {
 		coordinator = new Coordinator({
 			rootSessionId: "root_acceptance",
 			cwd: directory,
-			settings: { ...DEFAULT_V2_SETTINGS, engine: "v2", maxConcurrentPrompts: 1 },
+			settings: { ...DEFAULT_V2_SETTINGS, maxConcurrentPrompts: 1 },
 			store: new AtomicStore(directory, "root_acceptance", directory),
 			runtimePool: pool,
 			rootAdapter: { deliver: (content: string) => rootMessages.push(content) } as any,
@@ -263,7 +263,7 @@ describe("V2 final acceptance", () => {
 		const resumed = new Coordinator({
 			rootSessionId: "root_acceptance",
 			cwd: directory,
-			settings: { ...DEFAULT_V2_SETTINGS, engine: "v2", maxConcurrentPrompts: 1 },
+			settings: { ...DEFAULT_V2_SETTINGS, maxConcurrentPrompts: 1 },
 			store: new AtomicStore(directory, "root_acceptance", directory),
 			runtimePool: resumedPool,
 			rootAdapter: { deliver: (content: string) => resumedMessages.push(content) } as any,

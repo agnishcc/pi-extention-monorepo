@@ -1,5 +1,10 @@
 # @agnishc/edb-claude-proxy
 
+> ## ⚠️ DEPRECATED — 2026-08-03
+>
+> This extension is no longer maintained. Do not install it for new setups, and remove it if already installed (`pi uninstall @agnishc/edb-claude-proxy`).
+> The code remains in the repo for reference only.
+
 A Pi CLI extension that registers a `claude_proxy` tool — lets the pi agent delegate tasks to **Claude Code CLI** running in non-interactive (`--print`) mode.
 
 ## Use cases
