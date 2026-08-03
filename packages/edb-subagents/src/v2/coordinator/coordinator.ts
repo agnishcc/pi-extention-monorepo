@@ -575,10 +575,32 @@ export class Coordinator {
 	): Promise<void> {
 		const text = run ? childResultMessage(message, run) : JSON.stringify(message.payload);
 		const kind = message.recipientAgentId === "root" ? "root_message" : "agent_message";
+		const agent = run ? this.registry.getAgent(run.agentId) : undefined;
+		const payload: Record<string, unknown> = {
+			messageId: message.id,
+			recipientAgentId: message.recipientAgentId,
+			parentRunId,
+			text,
+		};
+		if (run) {
+			// Enrich with run/agent info so the root notification renderer can show a rich summary.
+			payload.agentId = run.agentId;
+			payload.state = run.state;
+			payload.taskId = run.taskId;
+			payload.startedAt = run.startedAt;
+			payload.completedAt = run.completedAt;
+			payload.error = run.error?.message;
+			payload.resultPreview = run.result ? run.result.text.slice(0, 500) : undefined;
+			payload.transcript = run.result?.sessionFile;
+			if (agent) {
+				payload.agentName = agent.displayName;
+				payload.description = agent.description ?? agent.displayName;
+			}
+		}
 		this.outbox!.add({
 			id: createId("op"),
 			kind,
-			payload: { messageId: message.id, recipientAgentId: message.recipientAgentId, parentRunId, text },
+			payload,
 			state: "pending",
 			attempts: 0,
 			nextAttemptAt: now(),
@@ -597,7 +619,7 @@ export class Coordinator {
 		}
 		const message = this.mailbox.all().find((candidate) => candidate.id === payload.messageId);
 		if (operation.kind === "root_message") {
-			this.options.rootAdapter.deliver(payload.text, { messageId: payload.messageId }, true);
+			this.options.rootAdapter.deliver(payload.text as string, payload, true);
 			if (message) this.mailbox.update(message.id, { state: "delivered", deliveredAt: now() });
 			return;
 		}
