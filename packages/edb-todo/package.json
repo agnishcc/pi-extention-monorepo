@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-todo",
-	"version": "0.18.2",
+	"version": "0.19.0",
 	"description": "Pi extension: structured task list with live widget and system-prompt injection to prevent goal drift",
 	"keywords": [
 		"pi-package",
@@ -43,7 +43,7 @@
 		"typebox": "*"
 	},
 	"dependencies": {
-		"@agnishc/edb-protocol": "0.18.2"
+		"@agnishc/edb-protocol": "^0.19.0"
 	},
 	"engines": {
 		"node": ">=22.19.0"
