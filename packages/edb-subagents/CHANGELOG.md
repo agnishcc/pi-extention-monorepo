@@ -1,8 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [0.20.0] - 2026-08-03
 
-0.19.0] - 2026-08-03
+### Added
+- **Live agent widget steps** — the V2 widget now shows what each running agent is doing (active tool, latest response text, thinking) plus turns, tool-use count and a live token total.
+- **Interactive `/agents` menu** — status-grouped agent list (running / waiting / done / idle / error / retired) with per-agent actions: open the agent session in a new tmux window (`pi --session`), live-tail a running agent, stop, dispose, show record. New subcommands: `/agents list`, `/agents open <id>`, `/agents tail <id>`.
+- **Completion notification cards** — custom message renderer showing a themed summary (icon, agent name, status, duration, error, collapsible result preview, transcript path) with enriched run/agent details on the delivery payload.
+- **`subagents:usage` token events** — child runtimes capture per-turn token usage and the coordinator emits one event per turn (agentId, agentType, agentName, model, turnNumber, parentSessionId, input, output, cacheRead, cacheWrite), persisted on the run record for the token tracker.
+
+### Fixed
+- Duplicate completion deliveries when `get_subagent_result(wait: true)` is called repeatedly — wait links are now deduplicated per (parent, child run) and terminal runs ignore late outcomes.
+- Completion notifications no longer embed the full result text — parents retrieve results once via `get_subagent_result`, which now returns a model-facing run summary instead of the raw record (internal metadata stays out of the model context).
+- Bare `/agents` now opens the interactive menu instead of the plain tree (empty-args parsing).
+
+## [0.19.0] - 2026-08-03
 
 ### Added
 - **Subagent system V2** (`src/v2`, opt-in via `subagents.engine: "v2"`) — recursive agent tree with persistent reusable sessions, parent/child question routing with escalation to the human, logical foreground/background waiting, steering, follow-up, bounded concurrency, atomic state persistence, durable outbox and crash recovery.

@@ -1,7 +1,7 @@
 {
 	"name": "@agnishc/edb-ask-user",
-	"version": "0.19.0",
-	"description": "Pi extension: ask_user tool for structured questions — text, choice, and multi-step wizard",
+	"version": "0.20.0",
+	"description": "Pi extension: ask_user tool for structured questions \u2014 text, choice, and multi-step wizard",
 	"keywords": [
 		"pi-package",
 		"pi-extension",
