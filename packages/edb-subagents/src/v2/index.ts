@@ -8,6 +8,7 @@ import { TodoClient } from "./integrations/todo-client.js";
 import { AtomicStore } from "./persistence/atomic-store.js";
 import { HumanAdapter } from "./questions/human-adapter.js";
 import { QuestionService } from "./questions/question-service.js";
+import { ActivityBoard } from "./runtime/activity.js";
 import { loadV2AgentDefinitions } from "./runtime/agent-definitions.js";
 import { ChildRuntime } from "./runtime/child-adapter.js";
 import { RootAdapter } from "./runtime/root-adapter.js";
@@ -62,6 +63,7 @@ export default function subagentsV2Extension(pi: ExtensionAPI): void {
 		humanAdapter.setContext(ctx);
 		const questions = new QuestionService(new AgentRegistry());
 		let coordinatorReference!: Coordinator;
+		const activityBoard = new ActivityBoard();
 		const sessionFactory = new SessionFactory({
 			sessionsDirectory: join(stateDirectory, "sessions"),
 			rootModel: ctx.model,
@@ -70,7 +72,7 @@ export default function subagentsV2Extension(pi: ExtensionAPI): void {
 			resolveDefinition: (agent) => definitions.get(agent.type),
 		});
 		const runtimePool = new RuntimePool(
-			() => new ChildRuntime(sessionFactory),
+			() => new ChildRuntime(sessionFactory, activityBoard),
 			settings.idleRuntimeEvictionMs,
 		);
 		coordinator = new Coordinator({
@@ -97,7 +99,7 @@ export default function subagentsV2Extension(pi: ExtensionAPI): void {
 		}
 		rootTaskToolsRegistered = coordinator.todoAvailable;
 		if (ctx.hasUI) {
-			widget = new AgentWidget(coordinator, ctx.ui);
+			widget = new AgentWidget(coordinator, ctx.ui, activityBoard);
 			widget.start();
 			const recovery = coordinator.recoverySummary;
 			if (recovery.interruptedRunIds.length || recovery.preservedQuestionIds.length) {

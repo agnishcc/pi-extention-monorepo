@@ -9,6 +9,7 @@ import type {
 	SegmentOutcome,
 	TurnUsage,
 } from "../types.js";
+import type { ActivityBoard } from "./activity.js";
 import { createRunControl } from "./run-control.js";
 import type { SessionFactory } from "./session-factory.js";
 
@@ -34,7 +35,10 @@ export class ChildRuntime implements AgentRuntime {
 	/** Per-run token usage entries captured from assistant message_end events. */
 	private usage: TurnUsage[] = [];
 
-	constructor(private readonly factory: SessionFactory) {}
+	constructor(
+		private readonly factory: SessionFactory,
+		private readonly activity?: ActivityBoard,
+	) {}
 
 	async load(agent: AgentRecord): Promise<void> {
 		this.agent = agent;
@@ -45,9 +49,13 @@ export class ChildRuntime implements AgentRuntime {
 		});
 		this.session = created.session;
 		this.session.subscribe((event) => {
-			if (event.type === "turn_end" && this.agent?.maxTurns && this.currentRunId) {
-				this.runTurns++;
-				if (
+			if (event.type === "turn_end") {
+				if (this.currentRunId) {
+					this.runTurns++;
+					const entry = this.activity?.entry(this.agent?.id ?? "");
+					if (entry) entry.turns = this.runTurns;
+				}
+				if (this.agent?.maxTurns && this.currentRunId) {
 					if (this.runTurns === this.agent.maxTurns) {
 						void this.session?.steer("You have reached your turn limit. Provide your final answer now.");
 					} else if (this.runTurns >= this.agent.maxTurns + 2) {
@@ -55,9 +63,36 @@ export class ChildRuntime implements AgentRuntime {
 						void this.session?.abort();
 					}
 				}
+			} else if (event.type === "tool_execution_start") {
+				const entry = this.activity?.entry(this.agent?.id ?? "");
+				if (entry) entry.tools.add(event.toolName);
+			} else if (event.type === "tool_execution_end") {
+				const entry = this.activity?.entry(this.agent?.id ?? "");
+				if (entry) {
+					entry.tools.delete(event.toolName);
+					entry.toolUses++;
+				}
+			} else if (event.type === "message_start" && event.message.role === "assistant") {
+				const entry = this.activity?.entry(this.agent?.id ?? "");
+				if (entry) entry.text = "";
+			} else if (event.type === "message_update" && event.message.role === "assistant") {
+				const entry = this.activity?.entry(this.agent?.id ?? "");
+				if (entry) {
+					entry.text = event.message.content
+						.filter((part): part is { type: "text"; text: string } => part.type === "text")
+						.map((part) => part.text)
+						.join(" ")
+						.slice(0, 400);
+				}
 			} else if (event.type === "message_end" && event.message.role === "assistant") {
 				this.control.requiresControlledAbort =
 					event.message.content.filter((part) => part.type === "toolCall").length > 1;
+				// Tool calls in this message are about to execute — show them as the current step
+				// (tool_execution_start may arrive later, after any output-token finalization).
+				const entry = this.activity?.entry(this.agent?.id ?? "");
+				for (const part of event.message.content) {
+					if (part.type === "toolCall") entry?.tools.add(part.name);
+				}
 				// Capture per-turn token usage for the token-tracker integration (subagents:usage).
 				const usage = (
 					event.message as { usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }
@@ -70,6 +105,8 @@ export class ChildRuntime implements AgentRuntime {
 						cacheRead: usage.cacheRead ?? 0,
 						cacheWrite: usage.cacheWrite ?? 0,
 					});
+					const entry = this.activity?.entry(this.agent?.id ?? "");
+					if (entry) entry.tokens += (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheWrite ?? 0);
 				}
 			}
 		});
@@ -85,6 +122,7 @@ export class ChildRuntime implements AgentRuntime {
 			this.runTurns = 0;
 			this.turnLimitReached = false;
 			this.usage = [];
+			if (this.agent) this.activity?.reset(this.agent.id);
 		}
 		this.running = true;
 		this.control.requestedYield = null;
@@ -167,6 +205,7 @@ export class ChildRuntime implements AgentRuntime {
 
 	async dispose(): Promise<void> {
 		await this.unload();
+		if (this.agent) this.activity?.delete(this.agent.id);
 		this.agent = undefined;
 		this.usage = [];
 	}
