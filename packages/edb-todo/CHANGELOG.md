@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- `TaskService` application layer shared by the existing tools and the new versioned RPC server (`edb:todo:v1:*` events).
+- Idempotency ledger for mutating RPC operations (replay-safe by `operationId`).
+
+### Changed
+- File store locking is asynchronous (no synchronous busy-wait); `createMany` is a single transactional write; dependency cycles/self-links are rejected before commit; corrupt files are preserved as `.corrupt-<timestamp>` instead of silently treated as empty.
+- Explicit `cancelled`/`failed` handling in schemas, prompt and widget; widget/store cleanup on `session_shutdown`.
+
 ## [0.17.0] - 2026-07-27
 
 0.16.0] - 2026-06-22

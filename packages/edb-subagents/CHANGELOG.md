@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+- **Subagent system V2** (`src/v2`, opt-in via `subagents.engine: "v2"`) — recursive agent tree with persistent reusable sessions, parent/child question routing with escalation to the human, logical foreground/background waiting, steering, follow-up, bounded concurrency, atomic state persistence, durable outbox and crash recovery.
+- `@agnishc/edb-protocol` dependency for the versioned todo RPC.
+- Management commands: `/agents`, `/agents tree`, `/agents questions`, `/agents show`, `/agents stop`, `/agents dispose`, `/agents recovery`, `/agents outbox`.
+
+### Changed
+- Task integration now goes through the versioned `TodoClient` RPC instead of direct cross-extension events; children never access todo files directly.
+
 ## [0.17.0] - 2026-07-27
 
 0.16.0] - 2026-06-22
