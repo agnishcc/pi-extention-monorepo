@@ -7,6 +7,7 @@ import type {
 	RunRecord,
 	RuntimeMessage,
 	SegmentOutcome,
+	TurnUsage,
 } from "../types.js";
 import { createRunControl } from "./run-control.js";
 import type { SessionFactory } from "./session-factory.js";
@@ -30,6 +31,8 @@ export class ChildRuntime implements AgentRuntime {
 	private currentRunId: string | undefined;
 	private runTurns = 0;
 	private turnLimitReached = false;
+	/** Per-run token usage entries captured from assistant message_end events. */
+	private usage: TurnUsage[] = [];
 
 	constructor(private readonly factory: SessionFactory) {}
 
@@ -44,16 +47,31 @@ export class ChildRuntime implements AgentRuntime {
 		this.session.subscribe((event) => {
 			if (event.type === "turn_end" && this.agent?.maxTurns && this.currentRunId) {
 				this.runTurns++;
-				if (this.runTurns === this.agent.maxTurns) {
-					void this.session?.steer("You have reached your turn limit. Provide your final answer now.");
-				} else if (this.runTurns >= this.agent.maxTurns + 2) {
-					this.turnLimitReached = true;
-					void this.session?.abort();
+				if (
+					if (this.runTurns === this.agent.maxTurns) {
+						void this.session?.steer("You have reached your turn limit. Provide your final answer now.");
+					} else if (this.runTurns >= this.agent.maxTurns + 2) {
+						this.turnLimitReached = true;
+						void this.session?.abort();
+					}
+				}
+			} else if (event.type === "message_end" && event.message.role === "assistant") {
+				this.control.requiresControlledAbort =
+					event.message.content.filter((part) => part.type === "toolCall").length > 1;
+				// Capture per-turn token usage for the token-tracker integration (subagents:usage).
+				const usage = (
+					event.message as { usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }
+				).usage;
+				if (usage) {
+					this.usage.push({
+						turnNumber: this.usage.length + 1,
+						input: usage.input ?? 0,
+						output: usage.output ?? 0,
+						cacheRead: usage.cacheRead ?? 0,
+						cacheWrite: usage.cacheWrite ?? 0,
+					});
 				}
 			}
-			if (event.type !== "message_end" || event.message.role !== "assistant") return;
-			this.control.requiresControlledAbort =
-				event.message.content.filter((part) => part.type === "toolCall").length > 1;
 		});
 		agent.sessionFile = this.session.sessionFile ?? null;
 	}
@@ -66,6 +84,7 @@ export class ChildRuntime implements AgentRuntime {
 			this.currentRunId = run.id;
 			this.runTurns = 0;
 			this.turnLimitReached = false;
+			this.usage = [];
 		}
 		this.running = true;
 		this.control.requestedYield = null;
@@ -90,16 +109,22 @@ export class ChildRuntime implements AgentRuntime {
 					rotateRuntime: controlledAbort === "suspend_for_child",
 				};
 			}
-			if (this.abortReason) return { kind: "aborted", reason: this.abortReason };
-			if (this.turnLimitReached) return { kind: "failed", error: new Error("Child exceeded its turn limit") };
+			if (this.abortReason) return { kind: "aborted", reason: this.abortReason, usage: [...this.usage] };
+			if (this.turnLimitReached)
+				return { kind: "failed", error: new Error("Child exceeded its turn limit"), usage: [...this.usage] };
 			const lastAssistant = [...this.session.messages].reverse().find((candidate) => candidate.role === "assistant");
 			if (lastAssistant?.role === "assistant" && lastAssistant.stopReason === "error") {
-				return { kind: "failed", error: new Error(lastAssistant.errorMessage ?? "Child model error") };
+				return {
+					kind: "failed",
+					error: new Error(lastAssistant.errorMessage ?? "Child model error"),
+					usage: [...this.usage],
+				};
 			}
 			return {
 				kind: "completed",
 				text: assistantText(this.session),
 				sessionFile: this.session.sessionFile ?? "",
+				usage: [...this.usage],
 			};
 		} catch (error) {
 			const requestedYield = this.control.requestedYield as RunControl["requestedYield"];
@@ -109,9 +134,14 @@ export class ChildRuntime implements AgentRuntime {
 			if (requestedYield?.reason === "child_wait") {
 				return { kind: "waiting_child", waitLinkId: requestedYield.entityId, rotateRuntime: true };
 			}
-			if (this.abortReason) return { kind: "aborted", reason: this.abortReason };
-			if (this.turnLimitReached) return { kind: "failed", error: new Error("Child exceeded its turn limit") };
-			return { kind: "failed", error: error instanceof Error ? error : new Error(String(error)) };
+			if (this.abortReason) return { kind: "aborted", reason: this.abortReason, usage: [...this.usage] };
+			if (this.turnLimitReached)
+				return { kind: "failed", error: new Error("Child exceeded its turn limit"), usage: [...this.usage] };
+			return {
+				kind: "failed",
+				error: error instanceof Error ? error : new Error(String(error)),
+				usage: [...this.usage],
+			};
 		} finally {
 			this.running = false;
 			const controlledAbort = this.control.abortReason as AbortReason | null;
@@ -138,5 +168,6 @@ export class ChildRuntime implements AgentRuntime {
 	async dispose(): Promise<void> {
 		await this.unload();
 		this.agent = undefined;
+		this.usage = [];
 	}
 }

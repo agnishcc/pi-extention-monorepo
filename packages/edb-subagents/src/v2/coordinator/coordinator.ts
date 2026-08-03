@@ -63,6 +63,10 @@ export interface CoordinatorOptions {
 	questions: QuestionService;
 	humanAdapter: HumanAdapter;
 	diagnostics?: DiagnosticLog;
+	/** Fallback model string ("provider/id") used for subagents:usage when the agent has no explicit model. */
+	rootModel?: string;
+	/** Emit a subagents:usage event (token-tracker integration). Optional — no-op when omitted. */
+	emitUsage?: (payload: Record<string, unknown>) => void;
 }
 
 export interface AnswerReceipt {
@@ -440,15 +444,18 @@ export class Coordinator {
 		if (outcome.kind === "completed") {
 			run = transitionRun(run, "final_result");
 			run.result = truncateUtf8(outcome.text, this.options.settings.maxResultBytes, outcome.sessionFile);
+			run.usage = outcome.usage;
 			agent = transitionAgent(agent, "run_complete");
 		} else if (outcome.kind === "failed") {
 			run = transitionRun(run, "runtime_error");
 			run.error = { code: "RUNTIME_ERROR", message: outcome.error.message, stack: outcome.error.stack };
+			run.usage = outcome.usage;
 			agent = transitionAgent(agent, "run_fail");
 		} else {
 			if (!TERMINAL_RUN_STATES.has(run.state))
 				run = transitionRun(run, outcome.reason === "timeout" ? "timeout" : "cancel");
 			run.stopReason = outcome.reason;
+			run.usage = outcome.usage;
 			if (agent.state !== "idle") agent = transitionAgent(agent, "run_fail");
 		}
 		agent.currentRunId = null;
@@ -468,8 +475,28 @@ export class Coordinator {
 			this.enqueueTerminalTaskTransition(run);
 			await this.enqueueRunNotification(run);
 		}
+		this.emitRunUsage(run, agent);
 		await this.persist();
 		if (!this.shuttingDown) await this.drainMailbox(agent.id);
+	}
+
+	/** Emit per-turn subagents:usage events for the token-tracker integration (mirrors V1). */
+	private emitRunUsage(run: RunRecord, agent: AgentRecord): void {
+		if (!this.options.emitUsage || !run.usage?.length) return;
+		for (const u of run.usage) {
+			this.options.emitUsage({
+				agentId: agent.id,
+				agentType: agent.type,
+				agentName: agent.displayName,
+				model: agent.model ?? this.options.rootModel ?? "unknown",
+				turnNumber: u.turnNumber,
+				parentSessionId: this.options.rootSessionId,
+				input: u.input,
+				output: u.output,
+				cacheRead: u.cacheRead,
+				cacheWrite: u.cacheWrite,
+			});
+		}
 	}
 
 	private enqueueTerminalTaskTransition(run: RunRecord): void {

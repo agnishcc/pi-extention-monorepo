@@ -110,6 +110,8 @@ export interface RunRecord {
 	startedAt: string | null;
 	updatedAt: string;
 	completedAt: string | null;
+	/** Per-turn token usage captured during this run (when the runtime provided it). */
+	usage?: TurnUsage[];
 }
 
 export interface QuestionRecord {
@@ -253,11 +255,20 @@ export interface RuntimeMessage {
 }
 
 export type SegmentOutcome =
-	| { kind: "completed"; text: string; sessionFile: string; finalMessageId?: string }
+	| { kind: "completed"; text: string; sessionFile: string; finalMessageId?: string; usage?: TurnUsage[] }
 	| { kind: "waiting_parent"; questionId: QuestionId; rotateRuntime: boolean }
 	| { kind: "waiting_child"; waitLinkId: WaitLinkId; rotateRuntime: boolean }
-	| { kind: "failed"; error: Error }
-	| { kind: "aborted"; reason: AbortReason };
+	| { kind: "failed"; error: Error; usage?: TurnUsage[] }
+	| { kind: "aborted"; reason: AbortReason; usage?: TurnUsage[] };
+
+/** Per-turn token usage captured from a child's assistant messages (mirrors the V1 subagents:usage event). */
+export interface TurnUsage {
+	turnNumber: number;
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+}
 
 export interface AgentRuntime {
 	load(agent: AgentRecord): Promise<void>;

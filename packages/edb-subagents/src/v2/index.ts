@@ -16,8 +16,16 @@ import { SessionFactory } from "./runtime/session-factory.js";
 import { loadV2Settings } from "./settings.js";
 import { AgentWidget } from "./ui/agent-widget.js";
 import { registerCommands } from "./ui/commands.js";
+import { renderV2Notification, type V2NotificationDetails } from "./ui/notification-renderer.js";
 
 export default function subagentsV2Extension(pi: ExtensionAPI): void {
+	// Custom TUI renderer for sub-agent completion notifications (mirrors V1's subagent-notification).
+	pi.registerMessageRenderer<V2NotificationDetails>("edb-subagents-v2", (message, { expanded }, theme) => {
+		const d = message.details;
+		if (!d) return undefined;
+		return renderV2Notification(d, expanded, theme);
+	});
+
 	let coordinator: Coordinator | undefined;
 	let widget: AgentWidget | undefined;
 	let humanAdapter: HumanAdapter | undefined;
@@ -49,6 +57,7 @@ export default function subagentsV2Extension(pi: ExtensionAPI): void {
 		);
 		const todoClient = new TodoClient(pi, 1_000, registerRootTaskTools);
 		todoClient.start(rootSessionId);
+		const rootModelStr = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "unknown";
 		humanAdapter = new HumanAdapter();
 		humanAdapter.setContext(ctx);
 		const questions = new QuestionService(new AgentRegistry());
@@ -60,7 +69,10 @@ export default function subagentsV2Extension(pi: ExtensionAPI): void {
 			createTools: (agent, control, abort) => coordinatorReference.createAgentTools(agent.id, control, abort),
 			resolveDefinition: (agent) => definitions.get(agent.type),
 		});
-		const runtimePool = new RuntimePool(() => new ChildRuntime(sessionFactory), settings.idleRuntimeEvictionMs);
+		const runtimePool = new RuntimePool(
+			() => new ChildRuntime(sessionFactory),
+			settings.idleRuntimeEvictionMs,
+		);
 		coordinator = new Coordinator({
 			rootSessionId,
 			cwd: ctx.cwd,
@@ -72,6 +84,8 @@ export default function subagentsV2Extension(pi: ExtensionAPI): void {
 			questions,
 			humanAdapter,
 			diagnostics: new DiagnosticLog(join(stateDirectory, "diagnostics"), rootSessionId),
+			rootModel: rootModelStr,
+			emitUsage: (payload) => pi.events.emit("subagents:usage", payload),
 		});
 		coordinatorReference = coordinator;
 		await coordinator.start();
