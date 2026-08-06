@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Global agent definitions are now discovered when their `.md` files are symbolic links.
+
 ## [0.21.0] - 2026-08-06
 
 ### Added

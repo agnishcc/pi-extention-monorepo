@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -75,6 +75,21 @@ describe("V2 agent definitions", () => {
 		const definitions = loadV2AgentDefinitions(directory, false, agentDirectory);
 		expect(definitions.get("explorer")).toEqual(
 			expect.objectContaining({ prompt: "Explore prompt", tools: ["bash", "read", "write"], extensions: undefined }),
+		);
+	});
+
+	it("loads symlinked global definitions", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "edb-agent-definition-symlink-"));
+		directories.push(directory);
+		const agentDirectory = join(directory, "agent-home");
+		const target = join(directory, "linked.md");
+		await mkdir(join(agentDirectory, "agents"), { recursive: true });
+		await writeFile(target, "---\ndescription: Symlinked explorer\n---\nSymlinked prompt");
+		await symlink(target, join(agentDirectory, "agents", "explorer.md"));
+
+		const definitions = loadV2AgentDefinitions(directory, false, agentDirectory);
+		expect(definitions.get("explorer")).toEqual(
+			expect.objectContaining({ description: "Symlinked explorer", prompt: "Symlinked prompt" }),
 		);
 	});
 

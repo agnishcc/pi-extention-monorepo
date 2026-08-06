@@ -44,7 +44,7 @@ function readDefinition(path: string): V2AgentDefinition | undefined {
 function loadDirectory(directory: string, definitions: Map<string, V2AgentDefinition>): void {
 	if (!existsSync(directory)) return;
 	for (const entry of readdirSync(directory, { withFileTypes: true })) {
-		if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+		if ((!entry.isFile() && !entry.isSymbolicLink()) || !entry.name.endsWith(".md")) continue;
 		const definition = readDefinition(join(directory, entry.name));
 		if (definition) definitions.set(basename(entry.name, ".md"), definition);
 	}
