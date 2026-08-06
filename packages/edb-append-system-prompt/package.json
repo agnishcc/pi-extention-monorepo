@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-append-system-prompt",
-	"version": "0.21.0",
+	"version": "0.21.1",
 	"description": "Pi extension: set a per-session system prompt injection with enable/disable toggle",
 	"keywords": [
 		"pi-package",
