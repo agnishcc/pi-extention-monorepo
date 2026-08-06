@@ -699,7 +699,7 @@ Use Pi's exported configuration/path helpers rather than hardcoded `~/.pi` strin
 
 Create child sessions with:
 
-- no automatic extension discovery,
+- only the extensions explicitly listed in the definition's `extensions:` frontmatter (absent list ⇒ no extensions),
 - no inherited parent extension paths,
 - an explicit system prompt,
 - an exact built-in tool list,
@@ -709,9 +709,11 @@ Create child sessions with:
 
 Do not initialize every parent extension and hide its tools afterward.
 
+Extension loading (implemented): the definition's `extensions:` entries are resolved through pi's extension system — path-like entries are used as-is; bare names (e.g. `pi-web-access`, `npm:pi-web-access`) resolve via `DefaultPackageManager` (managed `agentDir/npm` installs and legacy global npm) with a fallback to the auto-discovered `agentDir/extensions/<name>` and `cwd/.pi/extensions/<name>` directories. Missing packages are never auto-installed from a child spawn — unresolved names are logged and skipped. The resolved paths are loaded via `discoverAndLoadExtensions(paths, agent.cwd, <never-existing-agent-dir>)` so global `~/.pi/agent/extensions` discovery is disabled. A project's own `.pi/extensions` may still be discovered, but their tools stay inactive unless named in the definition's `tools:` allowlist (the session's `tools:` list gates exposure). Failed paths are collected as errors and logged — spawn continues.
+
 ### 10.3 Tool profiles
 
-Define profiles as exact allowlists.
+Define profiles as the base allowlist. The definition's `tools:` frontmatter is **additive**: the child's builtins are `profile ∪ definition.tools` (deduplicated), not the profile intersected with the list. Definitions are trusted — a listed tool is granted even when it is not in the profile (full-trust model).
 
 Example:
 
@@ -2045,7 +2047,8 @@ V2 cannot become default until all are true:
 
 - [ ] Project agents require trusted project context.
 - [ ] Children receive exact tool allowlists.
-- [ ] Read-only profiles contain no unrestricted shell.
+- [x] Definition `tools:` is additive (`profile ∪ definition`) — full-trust model: listed tools are granted even outside the profile; read-only guarantees are definition-trust-based.
+- [x] Children load only explicitly listed `extensions:` (global discovery disabled; unlisted extension tools stay gated by the allowlist).
 - [ ] Caller identity cannot be supplied by the model.
 - [ ] Descendant permissions are tested.
 

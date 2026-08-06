@@ -1,6 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.20.2] - 2026-08-06
+
+### Changed
+- **Definition `tools:` frontmatter is now additive** — child builtins are `profile ∪ definition.tools` (deduplicated) instead of the profile intersected with the list. Definitions are fully trusted: listed tools are granted even outside the profile (e.g. a researcher can declare `bash`/`write`). Previously the list could only shrink the profile.
+- **Child extensions from frontmatter** — children load only the extensions explicitly listed in the definition's `extensions:` field (`discoverAndLoadExtensions` with global discovery disabled). Unlisted extension tools stay inactive because the session `tools:` allowlist gates exposure. Load failures are logged and the spawn continues. `extensions: true` (non-string) is treated as "no explicit extensions".
+- **Name-based extension resolution** — `extensions:` entries may be bare names (e.g. `pi-web-access`) instead of absolute paths. Names resolve through pi's extension system: `DefaultPackageManager` (managed `~/.pi/agent/npm` installs, legacy global npm) with a fallback to the auto-discovered `~/.pi/agent/extensions/<name>` and `<project>/.pi/extensions/<name>` directories. Missing packages are never auto-installed from a child spawn — unresolved names are logged and skipped. Path entries remain supported.
 
 ## [0.20.0] - 2026-08-03
 

@@ -5,6 +5,7 @@ import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/
 export interface V2AgentDefinition {
 	prompt?: string;
 	tools?: string[];
+	extensions?: string[];
 	model?: string;
 	thinking?: string;
 	maxTurns?: number;
@@ -16,9 +17,17 @@ function readDefinition(path: string): V2AgentDefinition | undefined {
 		const { frontmatter, body } = parseFrontmatter<Record<string, unknown>>(readFileSync(path, "utf8"));
 		const tools =
 			typeof frontmatter.tools === "string" ? frontmatter.tools.split(",").map((tool) => tool.trim()) : undefined;
+		const extensions =
+			typeof frontmatter.extensions === "string"
+				? frontmatter.extensions
+						.split(",")
+						.map((extension) => extension.trim())
+						.filter((extension) => extension.length > 0)
+				: undefined;
 		return {
 			prompt: body.trim(),
 			tools,
+			extensions,
 			model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
 			thinking: typeof frontmatter.thinking === "string" ? frontmatter.thinking : undefined,
 			maxTurns: typeof frontmatter.max_turns === "number" ? frontmatter.max_turns : undefined,

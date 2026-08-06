@@ -37,4 +37,40 @@ describe("V2 agent definitions", () => {
 			expect.objectContaining({ prompt: "Project security prompt", tools: ["read", "bash"] }),
 		);
 	});
+
+	it("parses the extensions frontmatter as a trimmed, non-empty list", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "edb-agent-extensions-"));
+		directories.push(directory);
+		const agentDirectory = join(directory, "agent-home");
+		await mkdir(join(agentDirectory, "agents"), { recursive: true });
+		await writeFile(
+			join(agentDirectory, "agents", "web.md"),
+			"---\ntools: web_search, read\nextensions: /tmp/pi-web-access/index.ts,  , /tmp/pi-intercom/index.ts\n---\nWeb prompt",
+		);
+
+		const definitions = loadV2AgentDefinitions(directory, false, agentDirectory);
+		expect(definitions.get("web")).toEqual(
+			expect.objectContaining({
+				prompt: "Web prompt",
+				tools: ["web_search", "read"],
+				extensions: ["/tmp/pi-web-access/index.ts", "/tmp/pi-intercom/index.ts"],
+			}),
+		);
+	});
+
+	it("treats non-string extensions values (e.g. `extensions: true`) as undefined", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "edb-agent-extensions-true-"));
+		directories.push(directory);
+		const agentDirectory = join(directory, "agent-home");
+		await mkdir(join(agentDirectory, "agents"), { recursive: true });
+		await writeFile(
+			join(agentDirectory, "agents", "explorer.md"),
+			"---\ntools: bash, read, write\nextensions: true\n---\nExplore prompt",
+		);
+
+		const definitions = loadV2AgentDefinitions(directory, false, agentDirectory);
+		expect(definitions.get("explorer")).toEqual(
+			expect.objectContaining({ prompt: "Explore prompt", tools: ["bash", "read", "write"], extensions: undefined }),
+		);
+	});
 });
