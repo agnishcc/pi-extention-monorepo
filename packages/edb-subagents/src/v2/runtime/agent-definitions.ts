@@ -3,6 +3,8 @@ import { basename, join } from "node:path";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
 export interface V2AgentDefinition {
+	description?: string;
+	context?: string;
 	prompt?: string;
 	tools?: string[];
 	extensions?: string[];
@@ -25,6 +27,8 @@ function readDefinition(path: string): V2AgentDefinition | undefined {
 						.filter((extension) => extension.length > 0)
 				: undefined;
 		return {
+			description: typeof frontmatter.description === "string" ? frontmatter.description : undefined,
+			context: typeof frontmatter.context === "string" ? frontmatter.context : undefined,
 			prompt: body.trim(),
 			tools,
 			extensions,
@@ -55,4 +59,23 @@ export function loadV2AgentDefinitions(
 	loadDirectory(join(agentDir, "agents"), definitions);
 	if (trustedProject) loadDirectory(join(cwd, CONFIG_DIR_NAME, "agents"), definitions);
 	return definitions;
+}
+
+function oneLine(value: string): string {
+	return value
+		.replace(/[\r\n]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+/** Format only user-defined specialized agents for the parent Agent tool description. */
+export function formatSpecializedAgentList(definitions: ReadonlyMap<string, V2AgentDefinition>): string {
+	if (definitions.size === 0) return "Available specialized agents:\n(none configured)";
+
+	const lines = ["Available specialized agents:"];
+	for (const [name, definition] of [...definitions.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+		lines.push(`- ${name}: ${oneLine(definition.description ?? "Specialized agent")}`);
+		if (definition.context?.trim()) lines.push(`  When to use: ${oneLine(definition.context)}`);
+	}
+	return lines.join("\n");
 }

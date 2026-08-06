@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Specialized-agent definitions are now listed in the `Agent` tool description for main-agent routing.
+- Agent usage guidance now defaults to frontmatter-configured models and thinking levels unless explicitly overridden by the user.
+
 ## [0.20.2] - 2026-08-06
 
 ### Changed

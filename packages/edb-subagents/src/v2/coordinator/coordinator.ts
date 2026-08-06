@@ -10,6 +10,7 @@ import { applyRetention } from "../persistence/retention.js";
 import { childQuestionMessage, childResultMessage, parentAnswerMessage } from "../prompts/internal-messages.js";
 import type { HumanAdapter } from "../questions/human-adapter.js";
 import type { QuestionService } from "../questions/question-service.js";
+import type { V2AgentDefinition } from "../runtime/agent-definitions.js";
 import type { RootAdapter } from "../runtime/root-adapter.js";
 import type { RuntimePool } from "../runtime/runtime-pool.js";
 import type { SubagentsV2Settings } from "../settings.js";
@@ -67,6 +68,8 @@ export interface CoordinatorOptions {
 	rootModel?: string;
 	/** Emit a subagents:usage event (token-tracker integration). Optional — no-op when omitted. */
 	emitUsage?: (payload: Record<string, unknown>) => void;
+	/** Trusted project/global specialized definitions shown in the Agent tool description. */
+	agentDefinitions?: ReadonlyMap<string, V2AgentDefinition>;
 }
 
 export interface AnswerReceipt {
@@ -1047,7 +1050,7 @@ export class Coordinator {
 
 	createAgentTools(agentId: AgentId, control?: RunControl, abort?: () => void): ToolDefinition[] {
 		const tools: ToolDefinition[] = [
-			createAgentTool(this, agentId, control, abort),
+			createAgentTool(this, agentId, control, abort, this.options.agentDefinitions),
 			createGetResultTool(this, agentId, control, abort),
 			createSendTool(this, agentId, control, abort),
 			createSteerTool(this, agentId),

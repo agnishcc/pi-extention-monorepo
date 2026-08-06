@@ -88,6 +88,7 @@ export default function subagentsV2Extension(pi: ExtensionAPI): void {
 			diagnostics: new DiagnosticLog(join(stateDirectory, "diagnostics"), rootSessionId),
 			rootModel: rootModelStr,
 			emitUsage: (payload) => pi.events.emit("subagents:usage", payload),
+			agentDefinitions: definitions,
 		});
 		coordinatorReference = coordinator;
 		await coordinator.start();

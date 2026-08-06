@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadV2AgentDefinitions } from "../../src/v2/runtime/agent-definitions.js";
+import {
+	formatSpecializedAgentList,
+	loadV2AgentDefinitions,
+	type V2AgentDefinition,
+} from "../../src/v2/runtime/agent-definitions.js";
 
 const directories: string[] = [];
 
@@ -72,5 +76,27 @@ describe("V2 agent definitions", () => {
 		expect(definitions.get("explorer")).toEqual(
 			expect.objectContaining({ prompt: "Explore prompt", tools: ["bash", "read", "write"], extensions: undefined }),
 		);
+	});
+
+	it("formats specialized definitions without exposing their prompt bodies", () => {
+		const definitions = new Map<string, V2AgentDefinition>([
+			[
+				"Writer",
+				{
+					description: "Documentation writer",
+					context: "Use for README and API documentation.",
+					prompt: "Private child instructions.",
+				},
+			],
+			["Auditor", { description: "Security auditor" }],
+		]);
+
+		expect(formatSpecializedAgentList(definitions)).toBe(
+			"Available specialized agents:\n" +
+				"- Auditor: Security auditor\n" +
+				"- Writer: Documentation writer\n" +
+				"  When to use: Use for README and API documentation.",
+		);
+		expect(formatSpecializedAgentList(definitions)).not.toContain("Private child instructions");
 	});
 });
