@@ -3,7 +3,7 @@
 All notable changes to `@agnishc/edb-agent-mode` will be documented in this file.
 
 
-## [Unreleased]
+## [0.21.0] - 2026-08-06
 
 ## [0.20.1] - 2026-08-03
 

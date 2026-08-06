@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.21.0] - 2026-08-06
 
 ### Added
 - Specialized-agent definitions are now listed in the `Agent` tool description for main-agent routing.

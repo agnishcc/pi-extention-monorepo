@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-custom-provider",
-	"version": "0.20.2",
+	"version": "0.21.0",
 	"description": "Custom model providers for pi",
 	"keywords": [
 		"pi-package",

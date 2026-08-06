@@ -1,6 +1,6 @@
 {
 	"name": "@agnishc/edb-claude-proxy",
-	"version": "0.20.2",
+	"version": "0.21.0",
 	"deprecated": "Deprecated as of 2026-08-03 — no longer maintained. Do not install for new setups; remove the extension if installed. The claude_proxy tool is superseded by pi's built-in agent delegation.",
 	"description": "[DEPRECATED] Pi extension: claude_proxy tool — delegate tasks to Claude Code CLI from within pi",
 	"keywords": [
