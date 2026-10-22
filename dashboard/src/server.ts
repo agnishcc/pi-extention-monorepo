@@ -3,6 +3,18 @@ import { DatabaseManager } from './db';
 import { readSessionTranscript, getAvailableSessionIds } from './sessionsReader';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { dlopen, FFIType, ptr } from 'bun:ffi';
+
+const PROCESS_NAME = 'pi-usage';
+if (process.platform === 'linux') {
+  const libc = dlopen('libc.so.6', {
+    prctl: {
+      args: [FFIType.int, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr],
+      returns: FFIType.int,
+    },
+  });
+  libc.symbols.prctl(15, ptr(new TextEncoder().encode(`${PROCESS_NAME}\0`)), null, null, null);
+}
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const DIST_DIR = join(import.meta.dir, '../dist');
