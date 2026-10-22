@@ -28,6 +28,7 @@
 	},
 	"files": [
 		"src",
+		"!src/**/*.test.ts",
 		"README.md",
 		"LICENSE",
 		"CHANGELOG.md"
@@ -38,6 +39,7 @@
 		]
 	},
 	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": "*"
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
 	}
 }

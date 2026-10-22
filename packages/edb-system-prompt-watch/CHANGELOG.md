@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+- `/prompt-diff` (alias `/system-prompt-diff`) command with a tabbed overlay showing a summary, a line-by-line diff, your active system prompt, and the bundled default prompt
+- Pi installation directory is now discovered automatically across global npm, pnpm, yarn, bun, standalone binaries, and development checkouts
+
+### Changed
+- Startup alert now points to `/prompt-diff` so upstream changes can be reviewed in place
+
 ## [0.21.1] - 2026-08-06
 
 ## [0.21.0] - 2026-08-06
